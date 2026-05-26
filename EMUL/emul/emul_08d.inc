@@ -24,8 +24,6 @@
 ; lea ereg,dword ptr [ESP+dword]         │ 08DHEX, 10reg100,   024HEX, dword
 ; lea ereg,dword ptr [erega+eregb+dword] │ 08DHEX, 10reg100, 00rgBrgA, dword 
 ;
-; lea erega, eregb                       │ 08DHEX, 11rgBrgA
-;
 ; По размеру и строению аналогичны "089H"
 ;
  emul_08D:      
@@ -41,13 +39,6 @@
                 sub     ah,ah
 ;
 ; *** ЭМУЛЯЦИЯ ИНСТРУКЦИИ ***
-;
-
-;		call    calc_offset        ; получим итоговое смещение
-;                                           ; скорректируем относительно
-;                                           ; буфера (с учетом секций)
-;                call    test_off
-;                jc      semul_err_ret
 ;
                 push    eax                ; EAX = ID инструкции
                 call    two_regs

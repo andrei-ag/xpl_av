@@ -101,7 +101,7 @@
 ; on exit:          EDX - New pointer to API information buffer
 ;──────────────────────────────────────────────────────────────────────────────
  proc retrive_apis
-;
+;                                  
                 push    edx
 ;
                 push    ebx                    
@@ -115,7 +115,7 @@
                 mov     ecx,dword [ebp+10h]     ; Adress table RVA
                 add     ecx,dword [esi+34h]     ; Image base
                 push    ecx
-                call    real_off
+                call    calc_virtual_offset
                 xchg    ecx,eax                 ; List of pointers to API offsets
 ;
                 mov     edx,dword [ebp]         ; Import LookUp
@@ -131,7 +131,7 @@
 ;
  get_api_name:  mov     eax,dword [ecx]         ; Get API name pointer
                 or      eax,eax
-                js      process_next_api        ; Avoid ordinals
+;                js      process_next_api        ; Avoid ordinals
                 jz      process_api_end         ; All LIBRARY apis was processed
 ;
                 push    ebx
@@ -148,7 +148,13 @@
                 jnc     continue_proc_api
 ;
  get_api_name_again:
+                push    ebx                     ; Check offset
+                mov     ebx,edx
+                call    test_off
+                pop     ebx
+                jc      process_next_api        ; Error in offset
                 mov     eax,dword [edx]       
+;
                 or      eax,eax
                 js      process_next_api        ; Avoid ordinals
                 jz      process_api_end         ; All LIBRARY apis was processed
@@ -166,11 +172,11 @@
  continue_proc_api:
                 inc     eax
                 inc     eax                     ; Skip hint (WORD)
-                stosd                           ; Store pointer to API NAME
-;
  store_apis_offset:
                 call    test_api_name
                 jc      process_next_api        ; Invalid name
+;
+                stosd                           ; Store pointer to API NAME
 ;
                 push    ecx edx
                 push    eax                     ; EAX = API name
@@ -185,7 +191,7 @@
                 
                 stosd                           ; Store pointer API offset
 ;
- store_apis_lib_name:
+; store_apis_lib_name:
                 mov     eax,ebx
                 stosd                           ; Store pointer to current LIB
                 inc     dword [imported_api_number]

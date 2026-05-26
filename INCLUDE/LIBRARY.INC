@@ -14,8 +14,8 @@
         	call    GetMainArgs
 ;
                 mov     ecx,[_argc]
-                or      ecx,ecx
-                jz      get_command_ret
+                cmp     ecx,1
+                jbe     get_command_ret
 ;
                 mov     esi,[_argv]
                 lodsd
@@ -66,18 +66,20 @@
 ;
  process_param: lodsb
                 lodsw
-                cmp     al,'*'
-                jz      set_scan_all_hdd
-                cmp     al,'c'
-                jz      set_cure_infected_file
                 cmp     ax,'ra'
                 jz      set_report_append
                 cmp     ax,'rc'
                 jz      set_report_create
                 cmp     ax,'t-'
                 jz      set_turn_off_emul_timer
+                cmp     ax,'di'
+                jz      set_show_ca_base         
                 cmp     al,'d'
                 jz      set_debug_mode
+                cmp     al,'*'
+                jz      set_scan_all_hdd
+                cmp     al,'c'
+                jz      set_cure_infected_file
 ;
                 pop     esi
                 jmp     get_command_ret          ; unknown param
@@ -86,8 +88,12 @@
                 inc     byte [debug_mode]        ; Создание дампов
                 jmp     next_param               
 ;───────────────
+ set_show_ca_base:
+                inc     byte [debug_show_loops]  ; Показываем БД кодо-анализатора по обнаруженным циклам
+                jmp     next_param               
+;───────────────
  set_turn_off_emul_timer:
-                dec     byte [emul_timer]    ; отключаем таймер эмулятора
+                dec     byte [emul_timer]        ; отключаем таймер эмулятора
                 jmp     next_param               
 ;───────────────
  set_scan_all_hdd:

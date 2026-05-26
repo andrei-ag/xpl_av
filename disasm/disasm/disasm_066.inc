@@ -66,9 +66,15 @@
 ;      mov reg,reg                       │ 066HEX,   089HEX,  11rgArgB
 ;                                        │ 066HEX,   08BHEX,  11rgArgB
 ;
+;      cbw                               │ 066HEX,   098HEX  
+;      movsw                             │ 066HEX,   0A5HEX  
 ;      cmpsw                             │ 066HEX,   0A7HEX  
 ;      stosw                             │ 066HEX,   0ABHEX  
 ;      lodsw                             │ 066HEX,   0ADHEX
+;      scasw                             │ 066HEX,   0AFHEX  
+;
+;      push word                         │ 066HEX,   068HEX,      word  
+;      push byte                         │ 066HEX,   06AHEX,      byte  
 ;
 ;   4) rol reg,1 (16 bit)                │ 066HEX,   0C1HEX,  11000reg, byte
 ;      ror reg,1                         │ 066HEX,   0C1HEX,  11001reg, byte
@@ -88,6 +94,25 @@
 ;      sal reg,1                         │ 066HEX,   0D1HEX,  11110reg
 ;      sar reg,1                         │ 066HEX,   0D1HEX,  11111reg
 ;
+;  5b) rol rega,regb (8 bit)             │ 066HEX,   0D2HEX,  11000reg
+;      ror rega,regb                     │ 066HEX,   0D2HEX,  11001reg
+;      rcl rega,regb                     │ 066HEX,   0D2HEX,  11010reg
+;      rcr rega,regb                     │ 066HEX,   0D2HEX,  11011reg
+;      shl rega,regb                     │ 066HEX,   0D2HEX,  11100reg
+;      shr rega,regb                     │ 066HEX,   0D2HEX,  11101reg
+;      sal rega,regb                     │ 066HEX,   0D2HEX,  11110reg
+;      sar rega,regb                     │ 066HEX,   0D2HEX,  11111reg
+;                         *** rega = regb
+;  5c) rol rega,regb                     │ 066HEX,   0D3HEX,  11000reg
+;      ror rega,regb                     │ 066HEX,   0D3HEX,  11001reg
+;      rcl rega,regb                     │ 066HEX,   0D3HEX,  11010reg
+;      rcr rega,regb                     │ 066HEX,   0D3HEX,  11011reg
+;      shl rega,regb                     │ 066HEX,   0D3HEX,  11100reg
+;      shr rega,regb                     │ 066HEX,   0D3HEX,  11101reg
+;      sal rega,regb                     │ 066HEX,   0D3HEX,  11110reg
+;      sar rega,regb                     │ 066HEX,   0D3HEX,  11111reg
+;                         *** rega = 16bit, regb = CL
+;
 ;   6) inc  reg (16 bit)                 │ 066HEX, 01000reg
 ;      dec  reg                          │ 066HEX, 01001reg
 ;      push reg                          │ 066HEX, 01010reg
@@ -96,6 +121,9 @@
 ;      popa                              │ 066HEX, 01100001
 ;
 ;   7) mov reg,word                      │ 066HEX, 10111reg,      word
+;
+;   8) bts reg,reg                       │ 066HEX,   00FHEX,    0ABHEX,  11rgArgB
+;
 ;
  @066_disasm:   lodsw
                 sub    ecx,ecx
@@ -114,6 +142,8 @@
                 jz    _@four_bytes               ; add ax,word
                 cmp    al,00Dh
                 jz    _@four_bytes               ; or ax,word
+                cmp    al,00Fh
+                jz     @066_disasm_00F_opcode    ; 00F = OPCODE
                 cmp    al,015h                
                 jz    _@four_bytes               ; adc ax,word
                 cmp    al,01Dh                
@@ -176,18 +206,32 @@
 ;
 ; Проверим на инструкции остальных разделов (№: 1, 2, 4, 5)               
 ;
+                cmp    al,068h
+                jz     @066_disasm_push_word     ; push word
+                cmp    al,06ah
+                jz     @066_disasm_push_byte     ; push byte
                 cmp    al,081h
                 jz     @066_disasm_1_2
+                cmp    al,098h
+                jz    _@two_bytes                ; cbw
+                cmp    al,0a5h
+                jz    _@two_spec                 ; movsw
                 cmp    al,0a7h
                 jz    _@two_spec                 ; cmpsw
                 cmp    al,0abh
                 jz    _@two_spec                 ; stosw
                 cmp    al,0adh
                 jz    _@two_spec                 ; lodsw
+                cmp    al,0afh
+                jz    _@two_spec                 ; scasw
                 cmp    al,0C1h
-                jz     @066_disasm_4
-                cmp    al,0D1h
-                jz     @066_disasm_3_5
+                jz     @066_disasm_4             ;
+                cmp    al,0D1h                   
+                jz     @066_disasm_3_5           ;
+                cmp    al,0D2h                   
+                jz     @066_disasm_3_5           ; 5B
+                cmp    al,0D3h                   
+                jz     @066_disasm_3_5           ; 5B
 ;
 ; Проверим на инструкции раздела 7
 ;
@@ -233,3 +277,22 @@
  @066_disasm_4: cmp    ah,11000000b
                 jc     unknown_instr
                 jmp   _@four_bytes
+;───────────────
+; Инструкции раздела №8
+;
+ @066_disasm_00F_opcode:
+                dec    esi
+                lodsw
+                inc    ecx
+                jmp    @00F_disasm_start
+;
+;      push word                         │ 066HEX,   068HEX,      word  
+;
+ @066_disasm_push_word:
+                inc    ecx
+;
+;      push byte                         │ 066HEX,   06AHEX,      byte  
+;
+ @066_disasm_push_byte:
+                inc    ecx
+                jmp    _@two_spec

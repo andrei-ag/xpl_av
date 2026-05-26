@@ -14,18 +14,9 @@
                 jc      semul_err_ret
 ;
                 xchg    ebx,eax
+		call    calc_offset            ; получим итоговое смещение
                 call    test_off
                 jc      semul_err_ret
-;
-;  Восстановим данные оригинального смещения и положения
-; в памяти относительно антивируса
-;
-                mov     esi,dword [offset_stack_ptr]
-                lodsd
-                mov     dword [.codeloc],eax
-                lodsd
-                mov     dword [.ip],eax
-                add     dword [offset_stack_ptr],8
 ;
                 pop     esi
                 mov     esi,ebx          ; ESI - новое смещение относительно АВ

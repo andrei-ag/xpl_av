@@ -33,9 +33,6 @@
                 pop     ebp                    ; и разбираем структуру инструкции
                 jc      semul_err_ret
 ;
-                xor     al,ah
-                sub     ah,ah
-;
 ; *** ЭМУЛЯЦИЯ ИНСТРУКЦИИ ***
 ;
 		call    calc_offset        ; получим итоговое смещение
@@ -43,6 +40,9 @@
                                            ; буфера (с учетом секций)
                 call    test_off
                 jc      semul_err_ret
+;
+                xor     al,ah
+                sub     ah,ah
 ;
                 push    eax                ; EAX = ID инструкции
                 call    two_regs

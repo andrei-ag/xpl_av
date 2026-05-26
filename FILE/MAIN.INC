@@ -2,6 +2,7 @@
 ; проверка файла "fname"
 ;
  proc process_file      fname
+ local .thread_handle:DWORD
 ;──────────────────────────────────────────────────────────────────────────────
                 pushad
                 mov     byte [cure_result],0
@@ -76,9 +77,7 @@
                 call    load_pe                  ; Загрузим PE в память
                 jc      close_file_handle
 ;───────────────
-                inc     eax
                 call    get_pe_ep                ; * определим точку входа в PE
-                
                 or      eax,eax
                 jnz     try_emulate
 ;───────────────
@@ -89,30 +88,22 @@
                 jmp     error_io_2
 ;───────────────
  try_emulate:
+;               pushad
+;               lea     eax,[thread_windmill] 
+;		push	0 0 0
+;		push 	eax
+;		push 	0 0
+;		invoke 	CreateThread
+;		mov     dword [.thread_handle],eax
+;               popad
+
 ;
 ; Get list of APIs imported by current PE
 ;
-                push    eax                   ; Save EP
-;
                 mov     ebx,dword [file_map_address]
-                mov     eax,dword [ph_loc]
-                add     eax,ebx
-                push    eax                   ; Pointer to PE header
-                call    get_imported_apis
-;
-                pop     eax                   ; Restore EP
-;
-; расчитаем старое смещение точки входа относительно файла загруженного в файл
-;
-                add     eax,ebx
-                mov     dword [temp+012],eax
-;
-; посчитаем оригинальное расположение точки входа
-; при загрузке программы в память
-;
                 add     ebx,dword [ph_loc]
-                mov     edx,dword [ebx+028h]     ; Entry point
-                add     edx,dword [ebx+034h]     ; Image base
+                push    ebx                   ; Pointer to PE header
+                call    get_imported_apis
 ;
                 mov     byte [temp+020],0        ; * проинициализируем "temp+20"
 ;
@@ -124,15 +115,18 @@
 ; эмулируем файл
 ;─
  try_emul:
-                push    edx                      ; - старая точка входа
                 push    eax                      ; - точка входа в буфере
                 push    0                        ; - режим эмуляции (полный)
                 push    2                        ; - тип файла (PE)
-                call    emulate                  ; * эмулируем файл
+                call    emulate                  ; -> * эмулируем файл
+;
+;               push    0
+;		push    dword [.thread_handle]
+;               invoke  TerminateThread
 ;
                 cmp     byte [debug_mode],1      ; включен режим создания дампов?
                 jnz     ill_or_healthy           ; -> нет
-
+;
                 push    [fname]                  ; - имя файла
                 call    debug_dump               ; * создаем дамп
 ;
@@ -168,7 +162,9 @@
  show_nfo:      call    write_string          ; * выведем на экран результат проверки
  show_eos:      push    msg_eos
                 call    write_string
-
+;
+		call    debug_ca_base         ; Отладочная информация о числе циклов
+;
  close_file:    cmp     dword [file_map_address],0
                 jz      close_file_handle
 ;

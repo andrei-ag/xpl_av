@@ -24,7 +24,7 @@
 ; 1j) mov dword ptr [ESP+dword],dword         │ 0C7HEX, 10000100,   024HEX, dword, dword
 ; 1k) mov dword ptr [erega+eregb+dword],dword │ 0C7HEX, 10000100, 00rgBrgA, dword, dword
 ;
-;  2) mov ereg,dword                          │ 0C7HEX, 10000reg,    dword
+;  2) mov ereg,dword                          │ 0C7HEX, 11000reg,    dword
 ;
 ;  По способу разбора совпадают с "0FFh", отличаются лишь
 ; размером (больше на 4 байта)
@@ -61,7 +61,7 @@
                 cmp    al,11000000b
                 jb     @0FF_disasm_test_x   ; 1 (i - k)
 ;
-;  2) mov ereg,dword                          │ 0C7HEX, 10000reg,    dword
+;  2) mov ereg,dword                          │ 0C7HEX, 11000reg,    dword
 ;
                 add    cl,2
                 jmp    disasm_ret

@@ -4,6 +4,9 @@
         user,'user32.dll'
 
     import kernel,\
+	CreateThread,'CreateThread',\
+	TerminateThread,'TerminateThread',\
+	Sleep,'Sleep',\
         lstrlenA,'lstrlenA',\
         GetProcessHeap,'GetProcessHeap',\
         GetStdHandle,'GetStdHandle',\

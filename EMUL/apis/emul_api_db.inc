@@ -58,7 +58,7 @@
  	dd __GetCommandLineA  ; *1
  	dd __KERNEL32_DLL
         db 0, 0, 0
- 	dd __GetStartupInfoA ; *2
+ 	dd __GetStartupInfoA  ; *2
  	dd __KERNEL32_DLL
  	db 1, 0, 0
         dd __GetEnvironmentStrings   ; *3

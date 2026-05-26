@@ -27,6 +27,9 @@
 ; LEGEND: 000 - ADD, 001 - OR,  010 - ADC, 011 - SBB
 ;         100 - AND, 101 - SUB, 110 - XOR, 111 - CMP
 ;
+; push word                             │ 066HEX, 068HEX,     byte
+; push byte                             │ 066HEX, 06AHEX,     byte
+; movsw                                 │ 066HEX, 0A5HEX  
 ; stosw                                 │ 066HEX, 0A7HEX  
 ; stosw                                 │ 066HEX, 0ABHEX  
 ; lodsw                                 │ 066HEX, 0ADHEX
@@ -37,17 +40,31 @@
 ;
 ; *** ОПРЕДЕЛЕНИЕ ТИПА ИНСТРУКЦИИ ***
 ;
+                cmp     al,068h
+                jz      emul_066_push   ; push word
+                cmp     al,06ah
+                jz      emul_066_push   ; push byte
+                cmp     al,0a5h
+                jz      emul_movs_bwd   ; MOVSW
                 cmp     al,0a7h
                 jz      emul_cmps_bwd   ; CMPSW
                 cmp     al,0abh
                 jz      emul_stos_bwd   ; STOSW
                 cmp     al,0adh
                 jz      emul_lods_bwd   ; LODSW
+                cmp     al,0afh
+                jz      emul_scas_bwd   ; SCASW
                 cmp     al,081h
                 jz      emul_066_081
                 jmp     semul_err_ret
 ;
-; xxx word ptr [...],word              │ 066HEX, 081HEX, 00XXXerg,     word
+; push word                             │ 066HEX, 068HEX,     byte
+; push byte                             │ 066HEX, 06AHEX,     byte
+;
+ emul_066_push: dec     esi
+                jmp     emul_push_pop
+;
+; xxx word ptr [...],word               │ 066HEX, 081HEX, 00XXXerg,     word
 ;
  emul_066_081:
                 dec     esi

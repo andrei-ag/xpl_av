@@ -35,6 +35,8 @@
  _strbuf               dd ?
  _hheap                dd ?
 ;
+ thread_handle         dd ?
+;
  handle                dd ?                      ; файловый номер
  heap_handle           dd ?                      ; блок памяти
  file_map_address      dd ?                      ; местоположение файла в памяти

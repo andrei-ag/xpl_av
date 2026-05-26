@@ -155,3 +155,38 @@
                 call    write_string
                 ret
  endp
+;──────────────────────────────────────────────────────────────────────────────
+ proc show_dword_in_hex no                 ; (c) _andy [mnt]
+;──────────────────────────────────────────────────────────────────────────────
+                push    [no]
+                push    text_buff
+                call    dword_to_str
+                push    text_buff
+                call    write_string
+                ret
+ endp
+;
+;──────────────────────────────────────────────────────────────────────────────
+ thread_windmill:
+		lea 	edx,[msg_windmill]
+                sub     ecx,ecx
+                add     cl,4
+ windmill_loop:
+                push	ecx edx edx
+;
+		push	100
+		invoke 	Sleep
+                pop 	edx
+
+		push 	0          
+		push 	bytes_read
+		push 	2
+		push 	edx
+                push    [console_out]                 ; handle
+		invoke 	WriteConsoleA
+		pop	edx ecx
+                
+		inc 	edx
+		inc 	edx
+		loop 	windmill_loop
+		jmp     thread_windmill

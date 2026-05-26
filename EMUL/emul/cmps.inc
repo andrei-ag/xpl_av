@@ -5,24 +5,20 @@
 ;
 ; Для имитации выполнения CMPS B/W/D сформируем в буфере следующий код
 ; 
-; PUSH ESI EDI
 ; MOV ESI, OFFSET
 ; MOV EDI, OFFSET
 ; CMPS(B/W/D)
-; POP EDI ESI
 ; RET
 ;
 ; и запустим его на выполнение
 ;
  proc emul_cmps              
+ local .temp_EREG:DWORD
 ;
-                pushad
                 push    edi
                 pop     esi                ; ESI указывает на начало инструкции
 ;
                 mov     edi,temp_instr_buf
-                mov     ax,5756h           ; ID = PUSH ESI EDI
-                stosw                      ; Store ID
                 mov     al,0BEh            ; ID = MOV ESI, dword
                 stosb                      ; Store ID
 
@@ -34,54 +30,46 @@
                 jc      emul_cmps_ret
 ;
                 mov     eax,ebx
-                stosd                      ; Store DWORD
-                mov     al,0BFh            ; ID = MOV EDI, dword
-                stosb                      ; Store ID
+                stosd                          ; Store DWORD
+                mov     dword [.temp_EREG],eax ; Запомним состояние ESI
+                                               ; до выполнения инструкции
+;
+                mov     al,0BFh               ; ID = MOV EDI, dword
+                stosb                         ; Store ID
 ;
                 mov     ebx,dword [regs+7*4]
-		call    calc_offset        ; получим итоговое смещение
-                                           ; скорректируем относительно
-                                           ; буфера (с учетом секций)
+		call    calc_offset           ; получим итоговое смещение
+                                              ; скорректируем относительно
+                                              ; буфера (с учетом секций)
                 call    test_off
                 jc      emul_cmps_ret
 ;
                 mov     eax,ebx
-                stosd                      ; Store DWORD
+                stosd                         ; Store DWORD
 ;
-                push    esi
-                push    ecx
-                rep     movsb              ; Store CMPS BYTE/WORD/DWORD
-                pop     ecx
-                pop     esi
+                rep     movsb                 ; Store CMPS BYTE/WORD/DWORD
 ;
-                mov     ax,5e5fh           ; ID = POP EDI ESI
-                stosw
+                mov     al,0c3h
+                stosb
 ;
-                push    esi
-                add     cl,1+1+5+5+1+1     ; размер инструкций
+                pushfd                     ; Сохраним значение флагов программы
+                push    dword [flags]      ; Установим значение флагов эмулируемой
+                popfd                      ; программы 
+;
                 mov     esi,temp_instr_buf
-                call    run_instr          ; выполним инструкцию
-                pop     esi
+                call    esi
 ;
-;  Рассчитаем размер перенесенных байтов по ID инструкции и увеличим
-; на него значение регистров ESI, EDI
+                pushfd                     ; Сохраним значение флагов
+                pop     dword [flags]      ; эмулируемой программы
+                popfd                      ; Восстановим состояние флагов программы
 ;
-                sub     ecx,ecx
-                lodsb
-;                
-                inc     ecx                ; + 1 байт
-                cmp     al,0a6h
-                jz      cmps_set_size      ; -> CMPSB (1 байт)
-                cmp     al,66h             
-                jz      its_cmps_w         ; -> CMPSW (2 байта)
- its_cmps_d:    inc     ecx                ; -> CMPSD (4 байта)
-                inc     ecx
- its_cmps_w:    inc     ecx
-
- cmps_set_size: add     dword [regs+6*4],ecx
-		add     dword [regs+7*4],ecx
+; Получим дельту изменения регистра ESI и изменим на
+; нее состояние виртуального регистра ESI и EDI
 ;
- emul_cmps_ret: popad
-                ret
+                sub     esi,dword [.temp_EREG]
+                add     dword [regs+6*4],esi
+                add     dword [regs+7*4],esi
+;
+ emul_cmps_ret: ret
 ;
  endp

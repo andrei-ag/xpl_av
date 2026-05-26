@@ -1,21 +1,26 @@
 ﻿;──────────────────────────────────────────────────────────────────────────────
 ; emulate - эмуляция кода (файлов формата Portable Executable)
 ;
-; on start :       ip - оригинальное расположение кода
-;             codeloc - смещение на код для эмуляции
+; on start :  codeloc - смещение на код для эмуляции
 ;                mode - режим : 0=полный, 1-без анализа вирусных сигнатур
 ;           file_type - тип файла : 0-COM, 1-EXE, 2-PE
 ;                       на данный момент поддерживается только тип 2
 ; on exit  :  - - - - -
 ;
- proc emulate           file_type, mode, codeloc, ip
+ proc emulate           file_type, mode, codeloc
+;
+ start_emul_time        = 3000;                   ; Начальное время эмуляции программы
+ repeat_times           = 5;                      ; Дополнительных попыток
+ add_emul_time          = 500;                    ; Дополнительное время
 ;──────────────────────────────────────────────────────────────────────────────
- local .codeloc:DWORD, .ip:DWORD                  ; temporary data
-
+; ".SEH_emul" - индикатор эмуляии обработчика SEH (1 - значит эмулируется)
+;
+ local .SEH_emul:BYTE, .emul_try:BYTE
+;                              
  emul_init:     pushad
                 jmp     set_timer
 ;
- emulator_nfo           db 'EMUL%015'             ; версия эмулятора
+ emulator_nfo           db 'EMUL%018'             ; версия эмулятора
 ;───────────────
 ;  Определим значение таймера (с момента запуска Windows (в миллисекундах)), на
 ; момент запуска эмулятора. Допустимое время эмуляции исполнения программы
@@ -30,34 +35,48 @@
                                     
 ; Инициализируем таймер эмулятора                
                 invoke  GetTickCount
-                add     eax,3100
+                add     eax,start_emul_time
                 mov     dword [temp+028],eax
 ;══════════════════════════════════════════════════════════════════════════════
 ; процесс инициализации эмулятора:
 ;   1) сохранение значения регистров (см. выше)
 ;   2) инициализация таймера (см. выше)
-;   3) инициализация анализатора кода ("ca_init")
-;   4) инициализация флага "зараженности" ("ill_mark")
-;   5) установка значения "виртуального стека", для эмуляции
+;   3) инициализация флага "зараженности" ("ill_mark")
+;   4) установка значения "виртуального стека", для эмуляции
 ;      обращения инструкций к стэку
-;   6) установка параметров переданных в процедуру: ip (6a) / codeloc (6b)
-;   7) инициализация дополнительного виртуального стека, для хранения
-;      ip и codeloc для корректной эмуляции возврата (ret) из call
+;   5) установка параметров переданных в процедуру: ip (6a) / codeloc (6b)
+;   6) инициализация SEH (расположен в начале виртуального стека)
+;   7) обнуляем базу данных кодо-анализатора циклов
+;   8) обнулим указатели цикла
+;   9) обнулим "попытку эмуляции"
+;  10) установим первоначальное значение флагов программы 
 ;
  ca_initialization:
-                call    ca_init                  ; * 3
-                mov     dword [ill_mark],0       ; * 4
+                sub     eax,eax
+                
+                mov     dword [ill_mark],eax     ; * 3
 ;
                 mov     esi,dword [virtual_stack_pointer]
-                add     esi,virtual_stack_size
-                mov     dword [regs+016],esi     ; * 5
+                mov     dword [esi],eax          ; * 6 (указатель на обработчик SEH)
+                add     esi,virtual_stack_size   ; esi указывает на конец вирт. стека
+                mov     dword [regs+016],esi     ; * 4
 ;
-                mov     eax,[ip]                 ; * 6a
-                mov     dword [.ip],eax
-                mov     dword [regs+0*4],eax     ; - начальное значение вирт.
-                                                 ;   регистра = точке входа
-                mov     esi,[codeloc]            ; * 6b
-                mov     dword [.codeloc],esi
+                mov     esi,[codeloc]            ; * 5b
+                mov     dword [regs+0*4],esi     ; * 5a - начальное значение вирт.
+                                                 ;        регистра = точке входа
+                mov     byte [.SEH_emul],0       ; Пока обработчик SEH не эмулируется
+;
+                mov     dword [ca_current_loop_ptr],eax   ; * 8
+                mov     dword [ca_current_loop_ptr+4],eax
+;
+                mov     dword [emul_stop+4],eax
+                mov     byte [.emul_try],0       ; * 9
+;
+                mov     eax,dword [ca_base_pointer]
+                mov     dword [eax],0            ; * 7
+;
+                push    dword [flags_basic]      ; * 10
+                pop     dword [flags]            
 ;────────────────────────────────────────────────
 ; Перед эмуляцией инструкции:
 ;  1) Проверим расположена ли текущая инструкция в области памяти
@@ -68,19 +87,23 @@
 ;
  emulate_loop:  mov     ebx,esi
                 call    test_off
-                jnc     emulate_ca_fill_buf
-                mov     eax,-2
-                jmp     emulate_ret
-
- emulate_ca_fill_buf:  
-                call    ca_fill_buf              ; Запомним значение delta value
+                jnc     test_emul_mode
+                mov     eax,-2                   ; Код расположен вне участка памяти
+                jmp     emulate_ret              ; выделенного под PE файл
 ;══════════════════════════════════════════════════════════════════════════════
 ; проверка режима работы эмулятора (0 - полный, 1 - без проверки вирусных
 ; сигнатур)
 ;
+ test_emul_mode:
+                call    ca_store_loop            ; Анализатор циклов
+;
                 mov     eax,[mode]
                 or      eax,eax
                 jnz     emulate_dasm             ; * режим 1
+;
+                call    ca_in_loop                
+                jnc     emulate_dasm             ; в данный момент обрабатываем
+                                                 ; цикл (отключим сигнатурную проверку)
 ;
 ; запуск части анализатора кода, отвечающей за поиск вирусных сигнатур в
 ; текущей позиции.
@@ -105,8 +128,11 @@
                 mov     dword [emul_stop+4],esi
 ;
                 call    disasm          ; * запуск дизассемблера
+
                 cmp     eax,-1
                 jz      emulate_ret     ; * инструкция неизвестна дизассемблеру
+;
+                mov     dword [emul_stop+8],ecx
 ;
 ; edx - тип алгоритма, необходимого для эмуляции инструкции
 ;       0 - достаточно запуска в "карантине"
@@ -127,15 +153,12 @@
 ;───────────────────────
 ; * * * Имитация исполнения инструкций, обращающихся к смещениям
 ;
-;  Процесс "условно" разделен на три части, каждую я попытаюсь описать,
-; как можно подробнее.
-;
 ; Первая часть процесса:
 ;
 ;  Инструкции, которые обращаются к смещениям, требуют полной имитации
-; исполнения, так как исследуемый код был перенесен в антивирусный буфер и
-; расположение всех данных в памяти изменилось (относительно тех по которым
-; все еще будет обращаться программа (вирус)).
+; исполнения, так как исследуемый код (PE файл) был перенесен в антивирусный
+; буфер и расположение всех данных в памяти изменилось (относительно тех по
+; которым все еще будет обращаться программа (вирус)).
 ; Следовательно, имитируя исполнение инструкций такого рода, нужно изменять
 ; смещение, по которому программа обращается из буфера, на новое. Для этого
 ; дизассемблер дополнительно разбирает инструкции и заполняет буфер "dregs"
@@ -165,52 +188,22 @@
 ;      regs - буфер в котором хранятся значение регистров эмулируемой программы
 ;     dregs - буфер описанный выше
 ;
- @found_spec:   push    ebx esi ecx
-;
-                mov     byte [offset_nfo],0
+                push    ebx esi ecx
                 sub     ebx,ebx
 ;
                 mov     esi,dregs
                 lodsd
+                or      eax,eax                
+                jz      calculation_ended      ; Нет регистров
+;
                 xchg    eax,ecx                ; ECX = количество регистров
-;
-                or      ecx,ecx                
-                jz      spec_emul_ip           ; Нет регистров
-;
- count_sum_lp:  lodsd
-                cmp     byte [eax+_regs],0
-                jz      count_sum              ; вирт. рег. содержит "обычные" данные
-;
-                cmp     byte [eax+_regs],1
-                jnz     count_sum_vstack       
-                mov     byte [offset_nfo],1    ; вирт. рег. содержит delta value
-                jmp     count_sum
-;
- count_sum_vstack:                             ; Может быть указывает на
-                cmp     byte [eax+_regs],2     ; виртуальный стэк ?
-                jnz     count_sum              ; НЕТ ->
-;
-; Проверим смещение из виртуального регистра
-; 
- check_vreg_offet:
+ count_sum_loop:
+                lodsd
                 call    mul_4
                 add     ebx,dword [regs+eax]
-
-                push    dword [regs+eax]       ; par1: OFFSET
-                call    test_in_vstack         ; проверим смещение
-                jc      count_sum_loop   
-                mov     byte [offset_nfo],2    ; смещение указывает на вирт. стэк
-                jmp     count_sum_loop
+                loop    count_sum_loop
 ;
-; Прибавим данные регистра (не delta value или virtual stack)
-;
- count_sum:     call    mul_4
-                add     ebx,dword [regs+eax]
-;
- count_sum_loop:
-                loop    count_sum_lp
-;
- spec_emul_ip:  sub     eax,eax
+ calculation_ended:  
                 pop     ecx
 ;
                 push    edi
@@ -224,28 +217,13 @@
 ; эмуляции.
 ;
  choose_emul_proc:
+                sub     eax,eax
                 mov     al,byte [edi]
-;───────────────
-; PUSH, POP EREG:
-;
-                cmp     al,050h
-                jb      find_emul_proc
-                cmp     al,05fh
-                jbe     emul_push_pop                  
-;───────────────
-; NEAR JUMPS:
-; jo, jno, jb, jnb, je, jne, jbe, ja, js, jns, jp, jnp, jl, jnl, jle, jg
-;
- emul_check_jump_near:
-                cmp     al,070h
-                jb      find_emul_proc
-                cmp     al,07fh
-                jna     emul_jmp_near
-;
- find_emul_proc:
-                call    get_emul_proc
+                call    mul_4
+               
+                mov     eax,dword [emul_table_of_procs+eax]
                 or      eax,eax
-                jnz     run_emul_proc
+                jnz     run_emul_proc          ; -> Нет процедуры
 ;
                 mov     eax,-4                 ; Инструкция неизвестна эмулятору
                 jmp     semul_err_ret
@@ -262,6 +240,10 @@
                 call    emul_cmps
 		jmp     spec_emul_ret
 ;
+ emul_movs_bwd:     
+                call    emul_movs
+		jmp     spec_emul_ret
+;
  emul_lods_bwd:     
                 call    emul_lods
 		jmp     spec_emul_ret
@@ -270,10 +252,16 @@
                 call    emul_stos
 		jmp     spec_emul_ret
 ;
+ emul_scas_bwd:
+                call    emul_scas
+		jmp     spec_emul_ret
+;
  include                "emul\emul\_instr_table.inc"
  include                "emul\emul\ret.inc"
  include                "emul\emul\cmps.inc"
  include                "emul\emul\lods.inc"
+ include                "emul\emul\movs.inc"
+ include                "emul\emul\scas.inc"
  include                "emul\emul\stos.inc"
  include                "emul\emul\loop_byte.inc"
  include                "emul\emul\jump_near.inc"
@@ -282,23 +270,35 @@
 ;
  include                "emul\emul\emul_000.inc"
  include                "emul\emul\emul_001.inc"
+ include                "emul\emul\emul_002.inc"
  include                "emul\emul\emul_003.inc"
  include                "emul\emul\emul_008.inc"
  include                "emul\emul\emul_009.inc"
  include                "emul\emul\emul_00a.inc"
+ include                "emul\emul\emul_00b.inc"
  include                "emul\emul\emul_00f.inc"
  include                "emul\emul\emul_010.inc"
+ include                "emul\emul\emul_011.inc"
+ include                "emul\emul\emul_012.inc"
+ include                "emul\emul\emul_013.inc"
+ include                "emul\emul\emul_018.inc"
  include                "emul\emul\emul_019.inc"
+ include                "emul\emul\emul_01a.inc"
  include                "emul\emul\emul_01b.inc"
  include                "emul\emul\emul_020.inc"
  include                "emul\emul\emul_021.inc"
+ include                "emul\emul\emul_022.inc"
+ include                "emul\emul\emul_023.inc"
+ include                "emul\emul\emul_028.inc"
  include                "emul\emul\emul_029.inc"
+ include                "emul\emul\emul_02a.inc"
  include                "emul\emul\emul_02b.inc"
  include                "emul\emul\emul_030.inc"
  include                "emul\emul\emul_031.inc"
  include                "emul\emul\emul_032.inc"
  include                "emul\emul\emul_033.inc"
  include                "emul\emul\emul_066.inc"
+ include                "emul\emul\emul_067.inc"
  include                "emul\emul\emul_080.inc"
  include                "emul\emul\emul_081.inc"
  include                "emul\emul\emul_083.inc"
@@ -308,26 +308,25 @@
  include                "emul\emul\emul_08b.inc"
  include                "emul\emul\emul_08d.inc"
  include                "emul\emul\emul_08f.inc"
+ include                "emul\emul\emul_0a0-0a3.inc"
+ include                "emul\emul\emul_0c6.inc"
  include                "emul\emul\emul_0c7.inc"
+ include                "emul\emul\emul_0da.inc"
+ include                "emul\emul\emul_0db.inc"
  include                "emul\emul\emul_0f6.inc"
  include                "emul\emul\emul_0fe.inc"
  include                "emul\emul\emul_0ff.inc"
 ;
 ;═══════════════════════
- spec_emul_ret: pop     esi ebx                   ; Emulation completed
-                jmp     emulate_check
-;
  semul_err_ret: pop     esi ebx                   ; Emulation ERROR
                 jmp     emulate_ret
-;══════════════════════════════════════════════════════════════════════════════
+;
+ spec_emul_ret: pop     esi ebx                   ; Emulation completed
 
-;═══════════════════════
+;══════════════════════════════════════════════════════════════════════════════
+; Сюда переходим, когда эмуляция выполнения инструкции завершена
+;
  emulate_check: 
-;
-;  Запустим кодо-анализатор для проверки виртуальных регистров на
-; наличие в них: delta value
-;
-                call    ca_check_buf              
 ;
 ;  Проверим состояние таймера
 ;
@@ -337,7 +336,21 @@
                 invoke  GetTickCount              ; если было привышено макс.
                 cmp     eax,dword [temp+028]      ; закончилось время, отведенное на
                 jc      emulate_loop              ; эмуляцию программы? "сворачиваемся"
-                sub     eax,eax
+;
+; Если в данный момент эмулируется цикл, добавим времени и продолжим эмулцию
+; Количество повторов в подобной ситуации - ограничено
+;
+                call    ca_in_loop                
+                jc      emulate_ret               ; вне цикла
+;               
+                cmp     byte [.emul_try],repeat_times
+                jg      emulate_ret               ; число попыток исчерпанно
+;
+                inc     byte [.emul_try]
+                invoke  GetTickCount              ; если было привышено макс.
+                add     eax,add_emul_time
+                mov     dword [temp+028],eax      ; добавим еще времени
+                jmp     emulate_loop
 ;
 ;               * * * Завершение работы эмулятора * * *
 ;
@@ -350,16 +363,55 @@
 ;  4) "-4" - Инструкция неизвестна эмулятору
 ;  5) "-5" - Вызов API не обрабатывается эмулятором
 ;
- emulate_ret:   mov     dword [emul_stop],esi     ; запомним смещение, в котором
+;  В остальных случаях, закончилось время эмуляции
+;
+ emulate_ret:   
+ if defined DEBUG
+                int 3
+ end if
+                ;cmp     eax,-1
+                ;jz      try_emul_SEH
+                cmp     eax,-2
+                jz      try_emul_SEH
+                cmp     eax,-3
+                jnz     emulate_endp
+;
+;  Если код ошибки -2 или -3 и в ходе эмуляции изменилось смещение
+; обработчика SEH, попробуем проэмулировать его (возможно там расположена
+; часть полиморфного расшифровщика). 
+;
+ try_emul_SEH:  
+                cmp     byte [.SEH_emul],1        ; обработчик SEH уже эмулируется?
+                jz      emulate_endp
+;
+                mov     ebx,dword [virtual_stack_pointer] ; получим обработчик SEH
+                mov     ebx,dword [ebx]
+                or      ebx,ebx
+                jnz     emulate_SEH               ; пробуем эмулировать SEH
+;
+ emulate_endp:  mov     dword [emul_stop],esi     ; запомним смещение, в котором
                                                   ; остановился эмулятор
  if defined DEBUG
-;                int 3
+                int 3
  end if
                 popad
                 ret
+;═══════════════
+; Пробуем эмулировать обработчик SEH
+;
+ emulate_SEH:   call    test_off                  ; Тестируем смещение обработчика SEH
+                jc      emulate_endp              ; Указатель расположен вне загруженного PE
+;
+ if defined DEBUG
+                int 3
+ end if
+		call    calc_offset            
+;
+                mov     esi,ebx                   ; установим указатель на начало обработчика
+                inc     byte [.SEH_emul]          ; включим индикатор эмуляции SEH обработчика
+                jmp     emulate_loop
 ;
  endp
-;
 ;══════════════════════════════════════════════════════════════════════════════
 ; * * * Запуск инструкции в специальных условиях * * *
 ;
@@ -418,20 +470,13 @@
 ;
                 pushad
 ;
-; запомним значение флагов программы-эмулятора в стеке, затем перенесем
-; в регистр eax, а из него в переменную "temp"
+; запомним значение флагов программы-эмулятора в стеке
 ;
- save_orig_efl: pushfd
-                mov     eax,dword [esp]
-                mov     dword [temp],eax
-                popfd
+                pushfd   
 ;
-; значение флагов эмулируемого кода перенесем из переменной "flags" в регистр
-; eax, а из него в стек использующийся программой-эмулятором
+; значение флагов эмулируемого кода восстановим из переменной "flags"
 ;
- set_emul_efl:  pushfd
-                mov     eax,dword [flags]
-                mov     dword [esp],eax
+                push    dword [flags]
 ;
 ; установим значения регистров эмулируемого кода из переменной "regs"
 ; значение esp не устанавливается, иначе мы рискуем испортить значение флагов
@@ -445,8 +490,7 @@
                 mov     esi,dword [regs+024]
                 mov     edi,dword [regs+028]
 ;
-; инструкция "popfd" установит значение флагов эмулируемого кода,
-; которое мы сохраняли выше
+; инструкция "popfd" установит значение флагов эмулируемого кода
 ;
                 popfd
                 call    instr_buf                ; запустим на исполнение
@@ -461,19 +505,13 @@
                 mov     dword [regs+024],esi
                 mov     dword [regs+028],edi
 ;
-; новое значение флагов эмулируемого кода запомним в стеке, затем перенесем
-; в регистр eax и сохраним в переменной "flags"
+; новое значение флагов эмулируемого кода сохраним в переменной "flags"
 ;
- save_emul_efl: pushfd
-                mov     eax,dword [esp]
-                mov     dword [flags],eax
-                popfd
+                pushfd
+                pop     dword [flags]
 ;
-; установим значение флагов программы-эмулятора из переменной "temp"
+; установим значение флагов программы-эмулятора
 ;
- set_orig_efl:  pushfd
-                mov     eax,dword [temp]
-                mov     dword [esp],eax
                 popfd
 ;
 ; восстановим значение регистров программы-эмулятора

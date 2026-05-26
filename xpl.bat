@@ -1,2 +1,2 @@
 @echo off
-c:\fasm\fasm.exe xpl.asm > error
+c:\fasm\fasm.exe xpl.asm

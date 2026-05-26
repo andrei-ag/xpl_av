@@ -25,13 +25,18 @@
 ; 1j) xxx dword ptr [ESP+dword]           │ 0FFHEX, 10XXX100,   024HEX, dword
 ; 1k) xxx dword ptr [erega+eregb+dword]   │ 0FFHEX, 10XXX100, 00rgBrgA, dword
 ;
+;     xxx dword ptr [erega+eregb*2+dword] │ 0FFHEX, 10XXX100, 01rgBrgA, dword
+;     xxx dword ptr [erega+eregb*4+dword] │ 0FFHEX, 10XXX100, 10rgBrgA, dword
+;     xxx dword ptr [erega+eregb*8+dword] │ 0FFHEX, 10XXX100, 11rgBrgA, dword
+;
 ;  2) xxx ereg                            │ 0FFHEX, 11XXXreg
 ;
 ; LEGEND: 000 - INC, 001 - DEC, 010 - CALL, 011 - CALL FAR,
 ;         100 - JMP, 101 - ???, 110 - PUSH, 111 - ??? 
 ;
 ;
- @0FF_disasm:   lodsb
+ @0FF_disasm:   
+                lodsb
                 sub    ecx,ecx
                 push   eax
 ;
@@ -97,9 +102,10 @@
                 jbe    @0FF_disasm_ereg_byte ;    xxx dword ptr [ereg+byte]
                                              ; OR xxx dword ptr [erega+eregb+byte]
 ;
-; 1i) xxx dword ptr [ereg+dword]          │ 0FFHEX, 10XXXreg,    dword
-; 1j) xxx dword ptr [ESP+dword]           │ 0FFHEX, 10XXX100,   024HEX, dword
-; 1k) xxx dword ptr [erega+eregb+dword]   │ 0FFHEX, 10XXX100, 00rgBrgA, dword
+; 1i) xxx dword ptr [ereg+dword]              │ 0FFHEX, 10XXXreg,    dword
+; 1j) xxx dword ptr [ESP+dword]               │ 0FFHEX, 10XXX100,   024HEX, dword
+; 1k) xxx dword ptr [erega+eregb+dword]       │ 0FFHEX, 10XXX100, 00rgBrgA, dword
+;     xxx dword ptr [erega+eregb*2/4/8+dword] │ 0FFHEX, 10XXX100, ??rgBrgA, dword
 ;
                 mov    ah,10000000b
                 cmp    al,10111111b
@@ -141,21 +147,8 @@
 ;     xxx dword ptr [erega+eregb*2/4/8]   │ 0FFHEX, 00XXX100, ??rgBrgA
 ;
  @0FF_disasm_mul:
-                sub    edx,edx
-                add    dl,2
+                call   get_mul_arg
 ;
-                mov    ah,01000000b
-                cmp    al,01111111b
-                jbe    @0FF_disasm_mul_process ; ereg*2
-;
-                add    dl,2
-                mov    ah,10000000b
-                cmp    al,10111111b
-                jbe    @0FF_disasm_mul_process ; ereg*6
-;
-                add    dl,4
-                mov    ah,11000000b            ; ereg*8
- @0FF_disasm_mul_process:
                 mov    edi,dregs+004
                 add    cl,4+2                  ; Instruction size
 ;
@@ -222,10 +215,40 @@
 ;
                 lodsb
                 cmp    al,00111111b
-                ja     unknown_instr       ; ???
+                ja     @0FF_disasm_mul_2       ; xxx dword ptr [erega+eregb*2/4/8+dword]
 ;
                 sub    cl,2
                 jmp    @0FF_disasm_2eregs
+;
+;     xxx dword ptr [erega+eregb*2/4/8+dword] │ 0FFHEX, 10XXX100, ??rgBrgA, dword
+;
+ @0FF_disasm_mul_2:
+                call   get_mul_arg
+;
+                push   edx                ; MUL arg
+                inc    edx
+                mov    dword [dregs],edx  ; Set number of registers
+;
+                xor    al,ah
+                sub    ah,ah
+                call   two_regs
+;
+                mov    edi,dregs+004
+                xchg   eax,edx            
+                stosd                     ; Store "EREGA"
+                xchg   edx,eax
+;
+                pop    ecx
+ @0FF_disasm_mul_2_loop:
+                stosd                     ; Store "EREGB"
+                loop   @0FF_disasm_mul_2_loop
+;
+                sub    ecx,ecx
+                mov    cl,7
+;
+                sub    edx,edx
+                inc    edx                 ; Turn on full emulation flag
+                jmp    disasm_ret
 ;
 ; " xxx dword ptr [ereg+byte] " or " xxx dword ptr [esp+byte] "
 ;
@@ -233,10 +256,46 @@
                 sub    cl,2
                 jmp    @0FF_disasm_ereg
 ;
-; 1i) xxx dword ptr [ereg+dword]          │ 0FFHEX, 10XXXreg,    dword
-; 1j) xxx dword ptr [ESP+dword]           │ 0FFHEX, 10XXX100,   024HEX, dword
-; 1k) xxx dword ptr [erega+eregb+dword]   │ 0FFHEX, 10XXX100, 00rgBrgA, dword
+; 1i) xxx dword ptr [ereg+dword]              │ 0FFHEX, 10XXXreg,    dword
+; 1j) xxx dword ptr [ESP+dword]               │ 0FFHEX, 10XXX100,   024HEX, dword
+; 1k) xxx dword ptr [erega+eregb+dword]       │ 0FFHEX, 10XXX100, 00rgBrgA, dword
+;     xxx dword ptr [erega+eregb*2/4/8+dword] │ 0FFHEX, 10XXX100, ??rgBrgA, dword
 ;
  @0FF_disasm_ereg_dword:
                 add    cl,3
                 jmp    @0FF_disasm_ereg_byte
+;══════════════════════                                                         
+;
+; Get MUL arg for:
+;
+; xxx dword ptr [ereg*2/4/8]              │ 0FFHEX, 00XXX100, ??reg101, 00000000                                
+; xxx dword ptr [ereg*2/4/8+dword]        │ 0FFHEX, 00XXX100, ??reg101,    dword
+; xxx dword ptr [erega+eregb*2/4/8]       │ 0FFHEX, 00XXX100, ??rgBrgA
+; xxx dword ptr [erega+eregb*2/4/8+dword] │ 0FFHEX, 10XXX100, ??rgBrgA, dword
+;
+; LEGEND: 01XXXXXX = * 2
+;         10XXXXXX = * 4
+;         11XXXXXX = * 8
+;
+; on start:  AL = "???reg101" or "???rgBrgA"
+; on exit : EDX = ARG
+;
+ proc get_mul_arg
+                sub    edx,edx
+                add    dl,2
+;
+                mov    ah,01000000b
+                cmp    al,01111111b
+                jbe    get_mul_arg_ret ; ereg*2
+;
+                add    dl,2
+                mov    ah,10000000b
+                cmp    al,10111111b
+                jbe    get_mul_arg_ret ; ereg*6
+;
+                add    dl,4
+                mov    ah,11000000b    ; ereg*8
+;
+ get_mul_arg_ret:
+                ret
+ endp

@@ -19,7 +19,7 @@
    cmethod_del         = 1             ;  - необходимо удалить
 
 ;═══════════════════════────────────────────────── вирусная база
- vir_no                 dd 9                     ; количество записей в базе
+ vir_no                 dd 12                    ; количество записей в базе
 @001_type               db etype_pe
 @001_name               db 'W95/Marburg [8582]'
                         db 007 dup (0)
@@ -110,3 +110,33 @@
 @009_sig_data           db 0B8h, '?',027d,0FCh, '?',007d,000h,0FFh,0FFh,081h
                         db 20 dup (0)
 @009_cure_loc           dd cmethod_unk
+;-----------------------
+@010_type               db etype_pe
+@010_name               db 'W32/Driller'
+                        db 014 dup (0)
+@010_sig_len            db 18	
+@010_reserved           dw ?
+@010_sig_data           db 00Fh,031h, '?',089d,050h,064h, '?',156d,049h
+                        db  '?',240d,0c3h, '?',222d,08dh,05eh,0fch,053h
+                        db 12 dup (0)
+@010_cure_loc           dd cmethod_unk
+;-----------------------
+@011_type               db etype_pe
+@011_name               db 'W95/Prizzy'
+                        db 015 dup (0)
+@011_sig_len            db 20	
+@011_reserved           dw ?
+@011_sig_data           db 0e8h, '?',004d,05Dh, '?',016d,080h,07ch,024h,003h
+                        db 0bfh, '?',042d,066h,0abh, '?',012d,0cch,0fah,00fh
+                        db 10 dup (0)
+@011_cure_loc           dd cmethod_unk
+;-----------------------
+@012_type               db etype_pe
+@012_name               db 'W32/DeadCode'
+                        db 013 dup (0)
+@012_sig_len            db 20	
+@012_reserved           dw ?
+@012_sig_data           db 05fh,05eh,05dh, '?',015d,089h,085h, '?',034d,0e8h
+                        db  '?',009d,08bh,040h,008h, '?',037d,022h,083h,0bdh
+                        db 10 dup (0)
+@012_cure_loc           dd cmethod_unk

@@ -20,12 +20,11 @@ include 'FASM_INC\win32a.inc'
 ;DEBUG                equ 0 
 ;
  if defined DEBUG
-  test_parameters       db 'XPL.EXE /rc /t- c:\AV\test_emul',0
-;  test_parameters       db 'XPL.EXE /t- c:\AV\test_emul_unp\',0
-;  test_parameters       db 'XPL.EXE /t- c:\AV\v\vir\',0
+  test_parameters       db 'XPL.EXE /t- c:\av\1\',0
  end if
 
  msg_memory_error      db 'HeapCreate failed, need more memory!',13,10,0
+ msg_windmill          db '/',8,'-',8,'\',8,'|',8
  msg_first             db ' - ',0
  msg_next              db ', ',0
  msg_dots              db ' ... ',0
@@ -38,7 +37,7 @@ include 'FASM_INC\win32a.inc'
  msg_cured             db 'cured',0
  msg_incurable         db 'incurable (was deleted)!',0
  msg_disinf_er         db 'not cured!',0
- msg_info              db 'Explosion Antivirus 011 (c) Most Needful Things',13,10
+ msg_info              db 'Explosion Antivirus 012X (c) Most Needful Things',13,10
                        db 'next versions at - http://explosion.needful-things.ru',13,10
  msg_eos               db 13,10,0
  msg_params            db ' use: explosion.exe [switch] [path]',13,10
@@ -72,11 +71,12 @@ include 'FASM_INC\win32a.inc'
 ;───────────────────────
 ; процедуры анализатора кода (code analyzer / ca)
 ;
- include                "det\ca_ip.inc"        ; поиск процедур подсчета delta value
  include                "det\detect.inc"       ; проверка на совпадение
- include                "det\ca_init.inc"      ; инициализация "ca"
  include                "det\ca_pack.inc"      ; поиск сигнатур упаковщиков
-          
+ include                "det\ca_loop.inc"
+; include                "det\ca_ip.inc"        ; поиск процедур подсчета delta value
+; include                "det\ca_init.inc"      ; инициализация "ca"
+;          
 ;───────────────────────
 ; лечение файлов, инфицированных известными вирусами
 ;
@@ -86,7 +86,7 @@ include 'FASM_INC\win32a.inc'
 ; include                det\cure\thorin.inc     ;         w32/thorin
 ; include                det\cure\funlove.inc    ;         w32/funlove
 ; include                det\cure\marburg.inc    ;         w95/marburg
-
+;
 ;───────────────────────
 ; процедуры для работы с файлами
 ;          
@@ -97,7 +97,6 @@ include 'FASM_INC\win32a.inc'
  include                "file\pe\load_pe.inc"     ; Загрузка PE в антивирусный буффер
  include                "file\pe\get_ep.inc"      ; определение точки входа
  include                "file\pe\get_type.inc"    ; определение типа файла
- include                "file\pe\real_off.inc"    ; перевод смещений (в PE-файлах)
 ;───────────────────────
 ; вспомогательные функции
 ;
@@ -105,7 +104,10 @@ include 'FASM_INC\win32a.inc'
  include                'include\library.inc'
  include                'include\cmd.inc'         ; command line
 ;
- start:
+ start:         pushfd                           ; Сохраним первоначально
+                pop     dword [flags_basic]      ; состояние флагов программы
+                                                 ; (понадобится эмулятору)
+;
                 call    init_console             ; инициализируем консоль
 ;
                 mov     dword [file_map_address],0
@@ -160,13 +162,14 @@ include 'FASM_INC\win32a.inc'
 ;═══════════════
  prepare_path:  
                 push    file_path
-                invoke  SetCurrentDirectoryA     ; установим "первоначальный" каталог
+                invoke  SetCurrentDirectoryA     ; установим "первоначальный"
+                                                 ; каталог
 ;
  show_av_nfo:   push    report_fname             ; * создаем файл отчета если
                 call    init_rep                 ; * указан параметр "/r(a/c)"
                 push    msg_info
-                call    write_string             ; выведем информацию о антивирусе
-;
+                call    write_string             ; выведем информацию о
+;                                                ; антивирусе
                 push    find_buf+1
                 invoke  lstrlenA
 ;
@@ -178,6 +181,15 @@ include 'FASM_INC\win32a.inc'
                 dec     dword [temp+004]
 ;───────────────
  prepare_search:
+                pushad
+                lea     eax,[thread_windmill] 
+		push	0 0 0
+		push 	eax
+		push 	0 0
+		invoke 	CreateThread
+		mov     dword [thread_handle],eax
+                popad
+;
                 sub     ecx,ecx
                 mov     cl,byte [fixed_drives]
                 sub     edx,edx
@@ -187,8 +199,8 @@ include 'FASM_INC\win32a.inc'
 ;
                 pushad
                 push    find_buf
-                call    find                     ; рекурсивный обход (ищем файлы)
-                call    report_msg
+                call    find                     ; рекурсивный обход
+                call    report_msg               ; (ищем файлы)
                 popad
 ;
                 or      ecx,ecx
@@ -206,10 +218,22 @@ include 'FASM_INC\win32a.inc'
 ;
 ; Освободим память
 ;
-                invoke  HeapFree,[_hheap],0,[_argv]
-                invoke  HeapFree,[_hheap],0,[_strbuf]
+                push    [_argv]
+                push    0
+                push    [_hheap]
+                invoke  HeapFree
+;
+                push    [_strbuf]
+                push    0
+                push    [_hheap]
+                invoke  HeapFree
 ;                
-                invoke  HeapDestroy, [heap_handle]
+                push    [heap_handle]
+                invoke  HeapDestroy
+;
+                push    0
+ 		push    dword [thread_handle]
+                invoke  TerminateThread
 ;
  end_of_xpl:    push    0
                 invoke  ExitProcess
@@ -223,7 +247,8 @@ include 'FASM_INC\win32a.inc'
                 mov     edi,ebx                  ; edi - текущий каталог - 1
                 inc     edi
 ;
- invoke         lstrlenA, edi                    ; eax - длина пути
+                push    edi
+ 		invoke  lstrlenA                 ; eax - длина пути
 ;
                 add     edi,eax
                 cmp     byte [edi-1],'*'         ; если маска содержится в
@@ -234,7 +259,8 @@ include 'FASM_INC\win32a.inc'
                 inc     esi
  nneed_slash:   
 ;
- invoke         lstrlenA, esi                    ; eax - длина маски
+                push    esi
+ 		invoke  lstrlenA                 ; eax - длина маски
 ;
                 inc     eax                      ; прибавим null
                 xchg    eax,ecx
@@ -242,11 +268,12 @@ include 'FASM_INC\win32a.inc'
 ;────────────────
  first_find:    mov     edx,ebx                  ; edx - буффер
                 add     edx,1+260+4              ; edx = edx + 1 + 260 + 4
-                push    edx               ; получим смещение для структуры поиска
-                mov     edx,ebx   
+                push    edx                      ; получим смещение для
+                mov     edx,ebx                  ; структуры поиска
                 inc     edx
 ;
- invoke         FindFirstFileA, edx
+                push    edx
+ 		invoke  FindFirstFileA
 ;
                 cmp     eax,-1
                 jnz     save_fnd_hndl
@@ -255,7 +282,8 @@ include 'FASM_INC\win32a.inc'
  set_filesfind: inc     byte [ebx]               ; иначе ищем каталоги
                 jmp     first_find
  end_find:      
- invoke         FindClose, [ebx+1+260]           ; прекратим поиск
+ 		push    dword [ebx+1+260]        ; прекратим поиск
+		invoke  FindClose
                 ret
 ;───────────────
  save_fnd_hndl: mov     dword [ebx+1+260],eax
@@ -267,11 +295,12 @@ include 'FASM_INC\win32a.inc'
                 jnz     find_next                ; не трогаем
 ;───────────────
  prepare_rec:   mov     edi,ebx
-                add     edi,(ENTRY_SIZE)+1 ; не забудем про флаг который идет перед "маской" поиска
-                mov     esi,ebx
+                add     edi,(ENTRY_SIZE)+1       ; не забудем про флаг который 
+                mov     esi,ebx                  ; идет перед "маской" поиска
                 inc     esi
 ;
- invoke         lstrlenA, esi
+		push    esi
+ 		invoke  lstrlenA
 ;
                 xchg    eax,ecx
                 sub     ecx,4
@@ -283,7 +312,8 @@ include 'FASM_INC\win32a.inc'
                 mov     esi,ebx
                 add     esi,1+260+4+44
 ;
- invoke         lstrlenA, esi
+                push    esi
+		invoke  lstrlenA 
 ;
                 inc     eax
                 xchg    eax,ecx
@@ -301,7 +331,8 @@ include 'FASM_INC\win32a.inc'
                 inc     ebx
                 xchg    esi,ebx
 ;
- invoke        lstrlenA, esi
+                push    esi
+ 		invoke  lstrlenA
 ;
                 xchg    eax,ecx
                 sub     cl,3
@@ -310,7 +341,8 @@ include 'FASM_INC\win32a.inc'
                 pop     esi
                 add     esi,1+260+4+44
 ;
- invoke        lstrlenA, esi
+		push    esi
+ 		invoke  lstrlenA
 ;
                 xchg    eax,ecx
                 rep     movsb
@@ -320,13 +352,14 @@ include 'FASM_INC\win32a.inc'
  _process_file: push    file_path                ; - полный путь к файлу
                 call    process_file             ; * проверка файла
                 cmp     byte [cure_result],2     ; * если файл был вылечен,
-                jz     _process_file             ;   проверим еще раз
+                jz      _process_file            ;   проверим еще раз
 ;
  find_next:     mov     edx,ebx
                 add     edx,1+260+4
                 push    edx
 ;
- invoke         FindNextFileA, [ebx+1+260]
+                push    dword [ebx+1+260]
+ 		invoke  FindNextFileA 
 ;
                 cmp     eax,0
                 jnz     lf
@@ -334,9 +367,9 @@ include 'FASM_INC\win32a.inc'
 ;
  endp
 ;──────────────────────────────────────────────────────────────────────────────
- include                "emul\emulator.inc"       ; эмуляция программного кода
- include                "emul\disasm.inc"         ; дизассемблер инструкций
+ include                "emul\emulator.inc"      ; Эмулятор (основной модуль)
+ include                "disasm\disasm.inc"      ; Дизассемблер инструкций (основной модуль)
 ;
- include                "sections\idata.inc"      ; import data
- include                "sections\rsrc.inc"       ; resource data
+ include                "sections\idata.inc"     ; import data
+ include                "sections\rsrc.inc"      ; resource data
 ;──────────────────────────────────────────────────────────────────────────────

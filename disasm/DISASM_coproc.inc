@@ -3,16 +3,8 @@
 ;
 
 ;══════════════════════
-;  fcom   st(1)               │ 0D8HEX, D1
-;  fcompp st(1)               │ 0D8HEX, D9
-;
- @0D8_disasm:   lodsb
-                cmp    al,0D1h                 ; 
-                jz    _@two_copro              ; fcom st(1)
-                cmp    al,0D9h                 ; 
-                jz    _@two_copro              ; fcompp st(1)
-                jmp    unknown_instr               
-;══════════════════════
+; fld  st(?)              │ 0D9HEX, 11000???
+; fxch st(?)              │ 0D9HEX, 11001???
 ; fnop                    │ 0D9HEX, D0
 ; fchs                    │ 0D9HEX, E0
 ; fabs                    │ 0D9HEX, E1
@@ -42,6 +34,8 @@
 ; fcos                    │ 0D9HEX, FF
 ;
  @0D9_disasm:   lodsb
+                cmp    al,11001111b
+                jbe   _@two_copro              ; < fxch st(7)
                 cmp    al,0D0h                  
                 jz    _@two_copro              ; fnop
                 cmp    al,0E0h                  
@@ -98,67 +92,55 @@
                 jz    _@two_copro              ; fcos
                 jmp    unknown_instr               
 ;══════════════════════
-;  fucompp                  │ 0DAHEX, E9 
-;
- @0DA_disasm:   lodsb
-                cmp    al,0E9h
-                jz    _@two_copro              ; fucompp
-                jmp    unknown_instr               
-;══════════════════════
+;  fild dword ptr [ereg]    │ 0DBHEX, 00000reg
+;  fist dword ptr [ereg]    │ 0DBHEX, 00010reg
 ;  fclex                    │ 0DBHEX, E2 
 ;  finit                    │ 0DBHEX, E3
 ;
  @0DB_disasm:   lodsb
+                cmp    al,00000111b
+                jbe    @0DB_disasm_fild_fist   ; <= fild dword ptr [edi]
+                cmp    al,00010000b
+                jc     unknown_instr           ; < fist dword ptr [eax]
+                cmp    al,00010111b
+                jbe    @0DB_disasm_fild_fist   ; <= fist dword ptr [edi]
+;
                 cmp    al,0E2h
                 jz    _@two_copro              ; fclex
                 cmp    al,0E3h                  
                 jz    _@two_copro              ; finit
-                jmp    unknown_instr               
+                jmp    unknown_instr
+;
+ @0DB_disasm_fild_fist: 
+                call   two_regs
+                cmp    dl,100b
+                jz     unknown_instr           ; EREG = ESP, пока не разбираем
+                cmp    dl,101b
+                jz     unknown_instr           ; EREG = EBP, пока не разбираем
+                xchg   eax,edx
+                call   set_dreg_eax
+                add    cl,2
+                jmp    disasm_ret
 ;══════════════════════
-;  ffree                    │ 0DDHEX, C1 
-;  fst st(1)                │ 0DDHEX, D1 
-;  fstp st(1)               │ 0DDHEX, D9 
-;  fucom st(1)              │ 0DDHEX, E1 
-;  fucomp st(1)             │ 0DDHEX, E9 
+;  ffree st(?)              │ 0DDHEX, 11000???b
+;  ???                      │ 0DDHEX, 11001???b
+;  fst st(?)                │ 0DDHEX, 11010???b 
+;  fstp st(?)               │ 0DDHEX, 11011???b 
+;  fucom st(?)              │ 0DDHEX, 11100???b 
+;  fucomp st(?)             │ 0DDHEX, 11101???b
+;  fsave ereg               │ 0DDHEX, 11110REGb
+;  fstsw ereg               │ 0DDHEX, 11111REGb
 ;
  @0DD_disasm:   lodsb
-                cmp    al,0C1h
-                jz    _@two_copro              ; ffree
-                cmp    al,0D1h
-                jz    _@two_copro              ; fst st(1)
-                cmp    al,0D9h
-                jz    _@two_copro              ; fstp st(1)
-                cmp    al,0E1h
-                jz    _@two_copro              ; fucom st(1)
-                cmp    al,0E9h
-                jz    _@two_copro              ; fucomp st(1)
-                jmp    unknown_instr               
-;══════════════════════
-;  faddp st(1),st           │ 0DEHEX, C1
-;  fmulp st(1),st           │ 0DEHEX, C9
-;  fcompp                   │ 0DEHEX, D9
-;  fsubrp st(1),st(0)       │ 0DEHEX, E1
-;  fsubp st(1),st(0)        │ 0DEHEX, E9
-;  fdivrp st(1),st          │ 0DEHEX, F1
-;  fdivp st(1),st(0)        │ 0DEHEX, F9
+                cmp    al,11000000b
+                jc     unknown_instr           ; < ffree st(0)
+                cmp    al,11000111b
+                jbe    _@two_copro             ; <= ffree st(7)
 ;
- @0DE_disasm:   lodsb
-                cmp    al,0C1h                  
-                jz    _@two_copro              ; faddp st(1),st
-                cmp    al,0C9h                  
-                jz    _@two_copro              ; fmulp st(1),st
-                cmp    al,0D9h                  
-                jz    _@two_copro              ; fcompp
-                cmp    al,0E1h                  
-                jz    _@two_copro              ; fsubrp st(1),st(0)
-                cmp    al,0E9h                  
-                jz    _@two_copro              ; fsubp st(1),st(0)
-                cmp    al,0F1h                  
-                jz    _@two_copro              ; fdivrp st(1),st(0)
-                cmp    al,0F9h                  
-                jz    _@two_copro              ; fdivp st(1),st(0)
-                jmp    unknown_instr 
+                cmp    al,11010000b
+                jc     unknown_instr           ; < fst st(0)
+                ;jmp    _@two_copro               
 ;
 ; инструкции сопроцессора размером в 2 байта
 ;
- _@two_copro:   jz    _@two_bytes              ;              
+ _@two_copro:   jmp   _@two_bytes              ;              

@@ -3,7 +3,8 @@
 ;
 
 ;
- proc emul_lods              
+ proc emul_lods      
+ local .temp_ESI:DWORD        
 ;
                 mov     esi,edi
 		mov     ebx,dword [regs+6*4]
@@ -28,36 +29,31 @@
                 mov     eax,ebx
                 stosd                      ; СМЕЩЕНИЕ
 ;
-                push    esi ecx
+                mov     dword [.temp_ESI],eax ; Запомним состояние ESI
+                                              ; до выполнения инструкции
+;
+ ;               push    esi ecx
                 rep     movsb              ; перенесем инструкцию (lods...)
-                pop     ecx esi
+ ;               pop     ecx esi
 ;
                 mov     al,0c3h
                 stosb                      ; RET
-; 
-                mov     eax,dword [regs+0*4]
                 pop     edi
-                push    esi
+;
+                pushfd                     ; Сохраним значение флагов программы
+                push    dword [flags]      ; Установим значение флагов эмулируемой
+                popfd                      ; программы 
+                mov     eax,dword [regs+0*4]
                 call    edi                ; выполним инструкции
-                pop     esi               
+                popfd                      ; Восстановим состояние флагов программы
+;
+; Получим дельту изменения регистра ESI и изменим на
+; нее состояние виртуального регистра ESI
+;
+                sub     esi,dword [.temp_ESI]
+                add     dword [regs+6*4],esi
+;
                 mov     dword [regs+0*4],eax
-;
-;  Рассчитаем размер перенесенных байтов по ID инструкции и увеличим
-; на него значение регистра ESI
-;
-                sub     ecx,ecx
-                lodsb
-;                
-                inc     ecx                ; + 1 байт
-                cmp     al,0ach
-                jz      lods_set_size      ; -> LODSB (1 байт)
-                cmp     al,66h             
-                jz      its_lods_w         ; -> LODSW (2 байта)
- its_lods_d:    inc     ecx                ; -> LODSD (4 байта)
-                inc     ecx
- its_lods_w:    inc     ecx
-
- lods_set_size: add     dword [regs+6*4],ecx
  emul_lods_ret: ret
 ;
  endp

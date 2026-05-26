@@ -28,6 +28,10 @@
                 jz      emul_pop                  ; " popad "
 ;
                 mov     ah,4                      ; size of saved data
+                cmp     byte [edi],066h           ; Save WORD in stack? 
+                jnz     emul_push_pop_2
+                sub     ah,2                      ; new size of saved data
+ emul_push_pop_2:
                 cmp     al,068h
                 jz      emul_push                 ; " push dword "
                 cmp     al,06Ah
@@ -52,8 +56,8 @@
                 jc      emul_push_pop_error       ; Указатель расположен вне 
                                                   ; виртуального стека и загруженной программы
 ;                
+                mov     esi,edi
                 mov     edi,temp_instr_buf
-                dec     esi
                 push    edi ecx
                 rep     movsb              ; Перенесем инструкцию в спец. буфер
                 pop     ecx esi

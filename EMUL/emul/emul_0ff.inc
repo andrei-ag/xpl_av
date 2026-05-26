@@ -32,7 +32,6 @@
 ; 
  emul_0FF:      
                 sub     eax,eax
-                
                 lodsb
                 lodsb
                 cmp     al,11010000b 
@@ -93,8 +92,6 @@
 ;
  emul_0FF_inc_dec_build_instr:
 		call    calc_offset            ; получим итоговое смещение
-                                               ; скорректируем относительно
-                                               ; буфера (с учетом секций)
                 call    test_off
                 jc      semul_err_ret
 ;
@@ -109,81 +106,56 @@
                 mov     al,dl
                 shl     al,3
                 xor     al,101b
-                stosb                      ; Перенесем ID инструкции
-;
+                stosb                          ; Перенесем ID инструкции
+;                                              
                 mov     eax,ebx                       
-                stosd                      ; Перенесем смещение 
+                stosd                          ; Перенесем смещение 
 ;
                 sub     ecx,ecx
-                mov     cl,6               ; размер инструкции
-                call    run_instr          ; выполним инструкцию
+                mov     cl,6                   ; размер инструкции
+                call    run_instr              ; выполним инструкцию
                 jmp     spec_emul_ret
 ;═══════════════
-; CALL/ CALL FAR DWORD PTR [ ... ] 
+; CALL / CALL FAR DWORD PTR [ ... ] 
 ;
  emul_0FF_call_build_instr:
 		call    calc_offset            ; получим итоговое смещение
-                                               ; скорректируем относительно
-                                               ; буфера (с учетом секций)
                 call    test_off
                 jc      semul_err_ret
 
                 push    edi
                 mov     eax,edi
                 add     eax,ecx             ; EAX = Смещение сразу после инструкции CALL
-                sub     dword [regs+016],4
-                mov     edi,dword [regs+016]
-                stosd                       ; Запомним смещение в стеке (что бы потом вернуться к нему)
+                call    put_to_vstack
                 pop     edi
 ;
-                mov     esi,dword [ebx]     ; ESI Смещение для перехода (в памяти программы)
-
+                mov     ebx,dword [ebx]     ; ESI Смещение для перехода (в памяти программы)
 ;
  emul_0FF_call_save_ip:
-;
-; Сохраним значения Codeloc и IP что бы использовать при возврате из CALL
-;
-                push    edi
-                sub     dword [offset_stack_ptr],8
-                mov     edi,dword [offset_stack_ptr]
-                mov     eax,[.codeloc]
-                stosd
-                mov     eax,[.ip]
-                stosd            
-                pop     edi
-;
- emul_0FF_call_make_offset:
-;
-                push    esi
-                call    real_off       ; * превращаем виртуальное смещение в смещение относительно антивирусного буфера
-                mov     [.ip],esi      ; * изменим оригинальное положение в памяти
-                mov     [.codeloc],eax ; *         положение относительно антивирусного буфера
-;
-                mov     ebx,eax
+		call    calc_offset            ; получим итоговое смещение
 		call    test_off
                 jc      emul_0FF_check_API_call
 ;
-                pop     esi ebx
-                mov     esi,eax
+                pop     esi
+                mov     esi,ebx
+                pop     ebx
                 jmp     emulate_check
 ;
 ; API call
 ;
  emul_0FF_check_API_call:
-                mov     eax,esi     ; Может быть вызывается API ?
+                mov     eax,ebx                ; Может быть вызывается API ?
                 call    check_if_imported_api_call
                 jnc     semul_err_ret
 ;
                 call    emul_API_call
                 jc      semul_err_ret
-                jmp     spec_emul_ret
+                jmp     emul_ret               ; Выполним выход из API
 ;═══════════════
 ; JMP DWORD PTR [ ... ]
 ;
  emul_0FF_jmp_build_instr:
 		call    calc_offset            ; получим итоговое смещение
-                                               ; скорректируем относительно
-                                               ; буфера (с учетом секций)
                 call    test_off
                 jc      semul_err_ret
 ;
@@ -194,8 +166,6 @@
 ;
  emul_0FF_push_build_instr:
 		call    calc_offset            ; получим итоговое смещение
-                                               ; скорректируем относительно
-                                               ; буфера (с учетом секций)
                 call    test_off
                 jc      semul_err_ret
 ;
@@ -218,14 +188,10 @@
 ; " jmp ereg "
 ;
  emul_0FF_jmp_ereg:
-                mov     [.ip],ebx      ; * изменим оригинальное положение в памяти
-		call    calc_offset   ; получим итоговое смещение
-                                      ; скорректируем относительно
-                                      ; буфера (с учетом секций)
-                mov     [.codeloc],ebx ; * положение относительно антивирусного буфера
+		call    calc_offset            ; получим итоговое смещение
                 call    test_off
                 jc      semul_err_ret
- 
+;
                 pop     esi
                 mov     esi,ebx
                 pop     ebx

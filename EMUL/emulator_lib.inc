@@ -50,18 +50,69 @@
                 ret
  endp
 ;──────────────────────────────────────────────────────────────────────────────
+; orthodox_offset - смещение внутри программы ("orthodox") или
+;                   уже с учетом delta value (указывает на загруженный утилитой
+;                   в память исполняемый файл)
+;
+; on start : EBX - смещение для проверки
+;
+; on exit  : смещение не нужно корректировать : CF  = 0 
+;            смещение нужно корректировать    : CF  = 1  
+;
+ proc orthodox_offset
+;──────────────────────────────────────────────────────────────────────────────
+                push    eax
+;
+; Смещение указывает в область загружаемого файла? 
+;
+                mov     eax,dword [header_temp_buffer+034h] ; EAX = Image base
+                cmp     ebx,eax
+                jb      not_orthodox_offset   
+                add     eax,dword [header_temp_buffer+050h] ; + Virtual size
+                cmp     ebx,eax
+                jbe     its_orthodox
+;
+ not_orthodox_offset:
+                pop     eax
+                clc
+                ret
+;
+ its_orthodox:  pop     eax
+                stc
+                ret
+ endp
+;──────────────────────────────────────────────────────────────────────────────
+; calc_offset - корректируем смещение (находится в EBX) относительно 
+;               участка памяти в который был загружен PE-файл
+;
+;               результат расчетов в EBX
+;
  proc calc_offset            
 ;──────────────────────────────────────────────────────────────────────────────
                 push    eax
 ;
-                cmp     byte [offset_nfo],0
+                call    orthodox_offset
+                jc      calc_orthodox_offset
+; 
+;  Проверим индикатор сегмента "FS:", на случай, если происходит обращение к
+; указателю на обработчик SEH или PEB.
+;                                          
+                cmp     byte [segments+4],1
                 jnz     calc_offset_ret
+                cmp     ebx,030h           
+                ja      calc_offset_ret    ; > FS:[030h]
 ;
-                push    ebx                ; корректируем смещение относительно
-                call    real_off           ; буфера (с учетом секций)
-                mov     ebx,eax
+                add     ebx,dword [virtual_stack_pointer]
+                                           ; EBX = Указывает на начало вирт. стека
 ;
  calc_offset_ret:
+                pop     eax
+                ret
+;
+ calc_orthodox_offset:
+                push    ebx                ; получаем смещение внутри
+                call    calc_virtual_offset; антивирусного буфера
+                xchg    ebx,eax
                 pop     eax
                 ret
 ;
@@ -153,7 +204,7 @@
                 ret
  endp
 ;──────────────────────────────────────────────────────────────────────────────
-; test_off - проверка "допустимости" смещения указанного в регистре ebx
+; test_off - проверка "допустимости" смещения указанного в регистре EBX
 ;
 ;  Имитируя исполнение инструкций, которые обращаются по смещениям, есть очень
 ; большой риск ошибки в расчете "нового" смещения.
@@ -174,6 +225,9 @@
 ; в который она была загружена антивирусом, а так же виртуальным стеком,
 ; который расположен в этом же участке памяти, сразу за загруженной программой.
 ;
+; Структура загруженного в память исполняемого файла описана в:
+;                                                         "FILE\PE\LOAD_PE.INC" 
+;
 ; on start : EBX - смещение для проверки
 ;
 ; on exit  : нормальное смещение  : CF  = 0
@@ -188,17 +242,18 @@
                 mov     eax,dword [file_map_address]
                 cmp     ebx,eax
                 jb      test_off_ret
-                add     eax,dword [temp+024]   ; + размер загруженной программы
-                add     eax,virtual_stack_size ; + размер вирт. стека
-                                               ;   (расположен сразу за программой)
+                add     eax,dword [temp+024]     ; + размер загруженной программы
+                add     eax,virtual_stack_size*2 ; + размер вирт. стека (расположен
+                                                 ;   сразу за программой) и других
+                                                 ; структур
                 cmp     ebx,eax
                 ja      test_off_ret
-                pop     eax
+ test_off_ok:   pop     eax
                 clc
                 ret
 ;
  test_off_ret:  pop     eax
-                mov     eax,-2 
+                mov     eax,-2                 ; Set error code: EAX = -2
                 stc
                 ret
 ;
@@ -229,6 +284,21 @@
 ;
  not_in_vstack: pop     ebx eax
                 stc
+                ret
+ endp
+;──────────────────────────────────────────────────────────────────────────────
+; real_off - Calculate "real offset" (in antivirus buffer) from
+;            the originally virtual adress
+;
+; on start: voff - virtual adress
+;
+; on exit:   EAX - calculated "real offset"
+;
+ proc calc_virtual_offset voff
+;──────────────────────────────────────────────────────────────────────────────
+                mov     eax,[voff]               ; смещение инструкции в памяти
+                sub     eax,dword [image_base_of_pe]
+                add     eax,dword [file_map_address]
                 ret
  endp
 ;──────────────────────────────────────────────────────────────────────────────

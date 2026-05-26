@@ -24,7 +24,8 @@
 ; mov dword ptr [ESP+dword],ereg        │ 089HEX, 10reg100,   024HEX, dword
 ; mov dword ptr [erega+eregb+dword],reg │ 089HEX, 00reg100, 00rgBrgA, dword 
 ;
- emul_089:      push    05c7h          ; Идентификатор инструкции
+ emul_089:
+                push    05c7h          ; Идентификатор инструкции
                 call    emul_xxx_dword
                 jc      semul_err_ret
                 jmp     spec_emul_ret

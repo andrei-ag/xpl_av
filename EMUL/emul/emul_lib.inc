@@ -86,30 +86,33 @@
 ;─────────────────────────────────────────────────────────────────────────────
 ; Эмуляция инструкций структуры:
 ; 
-; xxx dword ptr [EREG],ereg              │ XXX, 00regERG
-; xxx dword ptr [esp],ereg               │ XXX, 00reg100,   024HEX
-; xxx dword ptr [erega+eregb],ereg       │ XXX, 00reg100, 00rgBrgA 
-; xxx dword ptr [dword],ereg             │ XXX, 00reg101,    dword
+; xxx dword ptr [EREG],ereg                │ XXX, 00regERG
+; xxx dword ptr [esp],ereg                 │ XXX, 00reg100,   024HEX
+; xxx dword ptr [erega+eregb],ereg         │ XXX, 00reg100, 00rgBrgA 
+; xxx dword ptr [dword],ereg               │ XXX, 00reg101,    dword
 ;
-; xxx dword ptr [ereg*2],ereg            │ XXX, 00reg100, 01reg101, 00000000
-; xxx dword ptr [ereg*2+dword],ereg      │ XXX, 00reg100, 01reg101,    dword
-; xxx dword ptr [ereg*4],ereg            │ XXX, 00reg100, 10reg101, 00000000
-; xxx dword ptr [ereg*4+dword],ereg      │ XXX, 00reg100, 10reg101,    dword
-; xxx dword ptr [ereg*8],ereg            │ XXX, 00reg100, 11reg101, 00000000
-; xxx dword ptr [ereg*8+dword],ereg      │ XXX, 00reg100, 11reg101,    dword
+; xxx dword ptr [ereg*2],ereg              │ XXX, 00reg100, 01reg101, 00000000
+; xxx dword ptr [ereg*2+dword],ereg        │ XXX, 00reg100, 01reg101,    dword
+; xxx dword ptr [ereg*4],ereg              │ XXX, 00reg100, 10reg101, 00000000
+; xxx dword ptr [ereg*4+dword],ereg        │ XXX, 00reg100, 10reg101,    dword
+; xxx dword ptr [ereg*8],ereg              │ XXX, 00reg100, 11reg101, 00000000
+; xxx dword ptr [ereg*8+dword],ereg        │ XXX, 00reg100, 11reg101,    dword
+;                                        
+; xxx dword ptr [erega+eregb*2],ereg       │ XXX, 00reg100, 01rgBrgA
+; xxx dword ptr [erega+eregb*4],ereg       │ XXX, 00reg100, 10rgBrgA
+; xxx dword ptr [erega+eregb*8],ereg       │ XXX, 00reg100, 11rgBrgA
 ;
-; xxx dword ptr [erega+eregb*2],ereg     │ XXX, 00reg100, 01rgBrgA
-; xxx dword ptr [erega+eregb*4],ereg     │ XXX, 00reg100, 10rgBrgA
-; xxx dword ptr [erega+eregb*8],ereg     │ XXX, 00reg100, 11rgBrgA
+; xxx dword ptr [ebp],ereg                 │ XXX, 01reg101, 00000000 
+; xxx dword ptr [esp+byte],ereg            │ XXX, 01reg100,   024HEX, byte
+; xxx dword ptr [EREG+byte],ereg           │ XXX, 01regERG,     byte
+; xxx dword ptr [erega+eregb+byte],ereg    │ XXX, 01reg100, 00rgBrgA, byte 
 ;
-; xxx dword ptr [ebp],ereg               │ XXX, 01reg101, 00000000 
-; xxx dword ptr [esp+byte],ereg          │ XXX, 01reg100,   024HEX, byte
-; xxx dword ptr [EREG+byte],ereg         │ XXX, 01regERG,     byte
-; xxx dword ptr [erega+eregb+byte],ereg  │ XXX, 01reg100, 00rgBrgA, byte 
-;
-; xxx dword ptr [EREG+dword],ereg        │ XXX, 10regERG,    dword
-; xxx dword ptr [ESP+dword],ereg         │ XXX, 10reg100,   024HEX, dword
-; xxx dword ptr [erega+eregb+dword],ereg │ XXX, 10reg100, 00rgBrgA, dword 
+; xxx dword ptr [EREG+dword],ereg          │ XXX, 10regERG,    dword
+; xxx dword ptr [ESP+dword],ereg           │ XXX, 10reg100,   024HEX, dword
+; xxx dword ptr [erega+eregb+dword],ereg   │ XXX, 10reg100, 00rgBrgA, dword 
+; xxx dword ptr [erega+eregb*2+dword],ereg │ XXX, 10reg100, 01rgBrgA, dword
+; xxx dword ptr [erega+eregb*4+dword],ereg │ XXX, 10reg100, 10rgBrgA, dword
+; xxx dword ptr [erega+eregb*8+dword],ereg │ XXX, 10reg100, 11rgBrgA, dword
 ;
 ; Сокращенно: "XXX DWORD PTR [...],EREG" или "XXX EREG, DWORD PTR [...]"
 ;

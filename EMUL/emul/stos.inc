@@ -3,9 +3,11 @@
 ;
 ;
  proc emul_stos              
+ local .temp_EDI:DWORD
 ;
                 mov     esi,edi
                 mov     ebx,dword [regs+7*4]
+                mov     dword [.temp_EDI],ebx
 		call    calc_offset        ; получим итоговое смещение
                                            ; скорректируем относительно
                                            ; буфера (с учетом секций)
@@ -26,6 +28,8 @@
                 stosb                      
                 mov     eax,ebx
                 stosd                      ; СМЕЩЕНИЕ
+                mov     dword [.temp_EDI],eax ; Запомним состояние EDI
+                                              ; до выполнения инструкции
 ;
                 push    ecx esi
                 rep     movsb              ; перенесем инструкцию (stos...)
@@ -33,29 +37,22 @@
 ; 
                 mov     al,0c3h
                 stosb                      ; RET
-;
-                mov     eax,dword [regs+0*4]
                 pop     edi
-                push    esi
+;
+                pushfd                     ; Сохраним значение флагов программы
+                push    dword [flags]      ; Установим значение флагов эмулируемой
+                popfd                      ; программы 
+                mov     eax,dword [regs+0*4]
                 call    edi                ; выполним инструкции
-                pop     esi               
+                popfd                      ; Восстановим состояние флагов программы
 ;
-;  Рассчитаем размер перенесенных байтов по ID инструкции и увеличим
-; на него значение регистра EDI
+; Получим дельту изменения регистра EDI и изменим на
+; нее состояние виртуального регистра EDI
 ;
-                sub     ecx,ecx
-                lodsb
-;                
-                inc     ecx                ; + 1 байт
-                cmp     al,0aah
-                jz      stos_set_size      ; -> STOSB (1 байт)
-                cmp     al,66h             
-                jz      its_stos_w         ; -> STOSW (2 байта)
- its_stos_d:    inc     ecx                ; -> STOSD (4 байта)
-                inc     ecx
- its_stos_w:    inc     ecx
-
- stos_set_size: add     dword [regs+7*4],ecx
+                sub     edi,dword [.temp_EDI]
+                add     dword [regs+7*4],edi
+;
+                mov     dword [regs+0*4],eax
  emul_stos_ret: ret
 ;
  endp

@@ -69,7 +69,9 @@
                 call    test_off              ; Test stack pointer
                 jc      emul_API_call_error   ; error
 ;
+                call    get_from_vstack       ; Get return offset for "RET" instr
                 add     dword [regs+016],edx  ; Free parameters used by API
+                call    put_to_vstack         ; Save return offset for "RET" instr
 ;
  emul_API_end:  clc
                 jmp     emul_API_call_ret

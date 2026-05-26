@@ -24,5 +24,5 @@
 ; mov ereg,dword ptr [ESP+dword]         │ 08BHEX, 10reg100,   024HEX, dword
 ; mov ereg,dword ptr [erega+eregb+dword] │ 08BHEX, 10reg100, 00rgBrgA, dword 
 ;
- emul_08B:
+ emul_08B:      
                 jmp     emul_08A
