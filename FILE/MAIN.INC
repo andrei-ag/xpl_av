@@ -1,89 +1,120 @@
-﻿.code
-;──────────────────────────────────────────────────────────────────────────────
+﻿;──────────────────────────────────────────────────────────────────────────────
 ; проверка файла "fname"
 ;
- process_file   proc    fname: dword
+ proc process_file      fname
 ;──────────────────────────────────────────────────────────────────────────────
                 pushad
-                mov     byte ptr [cure_result],0
- save_attribs:  push    fname
-                call    GetFileAttributesA
-                mov     dword ptr [temp+008],eax ; сохраним аттрибуты файла
+                mov     byte [cure_result],0
+ save_attribs:  push    [fname]
+                invoke  GetFileAttributesA
+                mov     dword [temp+008],eax     ; сохраним аттрибуты файла
 ;
  cleare_attr:   sub     eax,eax
-                push    eax fname
-                call    SetFileAttributesA       ; уберем все аттрибуты с файла
+                push    eax
+                push    [fname]
+                invoke  SetFileAttributesA       ; уберем все аттрибуты с файла
 ;
- open_file:     push    0 0 OPEN_EXISTING 0 0
-                push    GENERIC_RNW fname
-                call    CreateFileA              ; откроем файл для чтения
+ open_file:     push    0
+                push    0
+                push    OPEN_EXISTING
+                push    0
+                push    0
+                push    GENERIC_RNW
+                push    [fname]
+                invoke  CreateFileA              ; откроем файл для чтения
                 cmp     eax,-1                   ; выйдем в случае ошибки
                 jnz     read_fname
 ;───────────────
- error_io:      call    show_fname
-                push    offset msg_io_error      ; ошибка открытия файла
+ error_io:      push    [fname]
+                call    show_fname
+;
+                push    msg_io_error             ; ошибка открытия файла
  error_io_2:    call    write_string
-                push    offset msg_eos
+                push    msg_eos
                 call    write_string
                 jmp     process_ret
 ;───────────────
- read_fname:    mov     dword ptr [handle],eax   ; сохраним файловый номер
+ read_fname:    mov     dword [handle],eax       ; сохраним файловый номер
 ;
-                push    offset eh                ; - буфер под заголовок exe
-                push    offset ph                ; -       под заголовок pe
-                push    eax                      ; - файловый номер
-                push    fname                    ; - имя файла
+ get_file_size: push    0
+                push    [handle]
+                invoke  GetFileSize              ; EAX - Физический размер файла
+;
+                mov     dword [temp+024],eax
+;
+                push    header_temp_buffer       ; - для заголовков (EXE, PE)
+                push    [handle]                 ; - файловый номер
+                push    [fname]                  ; - имя файла
                 call    get_type                 ; * определим тип файла
+;
                 cmp     al,2
                 jnz     close_file               ; проверяем только PE-файлы
 ;───────────────
+                push    [fname]
                 call    show_fname
-                inc     dword ptr [scanned]; увеличим счетчик провереных файлов
-;───────────────
- get_file_size: push    0 handle
-                call    GetFileSize              ; в eax размер файла
-                cmp     eax,max_program_size     ; файл слишком велик ?
-                jna     rd_whole_file
+
+                inc     dword [scanned]          ; увеличим счетчик провереных файлов
 ;
-                push    offset msg_large
+                mov     eax,dword [temp+024]     ; физический размер файла
+                cmp     eax,max_program_size     
+                ja      very_big_pe              ; файл слишком велик
+;───────────────
+                mov     eax,dword [header_temp_buffer+050h] 
+                                                 ; размер файла в памяти
+                cmp     eax,max_program_size     
+                jbe     rd_whole_file            ; файл слишком велик
+;
+ very_big_pe:   push    msg_large        
                 call    write_string
                 jmp     process_ret
 ;
- rd_whole_file: mov     dword ptr [temp+024],eax
-                push    eax                      ; размер файла для "read_file"
-
-                push    FILE_BEGIN 0 0 handle    ; установим указатель на
-                call    SetFilePointer           ; самое начало файла
-
-                push    offset buffer            ; прочитаем файл
-                call    read_file                ; полностью в буфер "buffer"
+ rd_whole_file: cmp     eax,dword [temp+024]
+                jbe     load_pe_in_memory
+                mov     dword [temp+024],eax
+;
+ load_pe_in_memory:
+                call    load_pe                  ; Загрузим PE в память
+                jc      close_file_handle
 ;───────────────
- get_ep_pe:     push    offset ph                ; - буфер под заголовок pe
-                push    handle                   ; - файловый номер
+                inc     eax
                 call    get_pe_ep                ; * определим точку входа в PE
+                
                 or      eax,eax
                 jnz     try_emulate
 ;───────────────
 ; точка входа не найдена или расположена в 0 секции (между заголовком
 ;                                                    PE и первой секцией)
 ;
-                push    offset msg_pe_error
+                push    msg_pe_error
                 jmp     error_io_2
 ;───────────────
  try_emulate:
 ;
-; расчитаем старое смещение точки входа относительно буфера "buffer"
+; Get list of APIs imported by current PE
 ;
-                add     eax,offset buffer
-                mov     dword ptr [temp+012],eax
+                push    eax                   ; Save EP
 ;
-; расчитаем оригинальное расположение точки входа
+                mov     ebx,dword [file_map_address]
+                mov     eax,dword [ph_loc]
+                add     eax,ebx
+                push    eax                   ; Pointer to PE header
+                call    get_imported_apis
+;
+                pop     eax                   ; Restore EP
+;
+; расчитаем старое смещение точки входа относительно файла загруженного в файл
+;
+                add     eax,ebx
+                mov     dword [temp+012],eax
+;
+; посчитаем оригинальное расположение точки входа
 ; при загрузке программы в память
 ;
-                mov     edx,dword ptr [ph.EntryPoint]
-                add     edx,dword ptr [ph.ImageBase]
+                add     ebx,dword [ph_loc]
+                mov     edx,dword [ebx+028h]     ; Entry point
+                add     edx,dword [ebx+034h]     ; Image base
 ;
-                mov     byte ptr [temp+020],0    ; * проинициализируем "temp+20"
+                mov     byte [temp+020],0        ; * проинициализируем "temp+20"
 ;
 ; проверим файл на наличие в точке входа сигнатур запаковщиков
 ;
@@ -92,33 +123,39 @@
 ;─
 ; эмулируем файл
 ;─
- try_emul:      push    edx                      ; - старая точка входа
+ try_emul:
+                push    edx                      ; - старая точка входа
                 push    eax                      ; - точка входа в буфере
                 push    0                        ; - режим эмуляции (полный)
                 push    2                        ; - тип файла (PE)
                 call    emulate                  ; * эмулируем файл
 ;
-                cmp     byte ptr [debug_mode],1  ; включен режим создания дампов?
-                jnz     ill_or_healthy           ; нет
-                push    fname                    ; - имя файла
+                cmp     byte [debug_mode],1      ; включен режим создания дампов?
+                jnz     ill_or_healthy           ; -> нет
+
+                push    [fname]                  ; - имя файла
                 call    debug_dump               ; * создаем дамп
 ;
-ill_or_healthy: mov     eax,dword ptr [ill_mark] ; eax - номер обнаруженного вируса
+ ill_or_healthy:
+                mov     eax,dword [ill_mark]     ; eax - номер обнаруженного вируса
                 or      eax,eax                  ; если eax == 0, значит
                 jz      file_healthy             ; файл не заражен вирусом
 ;═══════════════════════
 ; в файле был обнаружен вирус (eax - номер найденной вирусной записи)
 ;
- file_ill:      inc     dword ptr [infected]; * увеличим счетчик больных файлов
+ file_ill:      inc     dword [infected]    ; * увеличим счетчик больных файлов
                 dec     eax                 ; - вирусные записи начинаются с нуля
-                push    eax eax
-                push    offset msg_inf        ; * выведем на экран инфорацию
+                push    eax
+;
+                push    eax
+                push    msg_inf               ; * выведем на экран инфорацию
                 call    write_string          ; * о том, что файл инфицирован
+;
                 pop     eax
 ;
                 mov     edx,entry_size        ; * расчитаем расположение
                 mul     edx                   ; * обнаруженной вирусной
-                add     eax,offset @001_type+1; * записи (в базе)
+                add     eax,@001_type+1       ; * записи (в базе)
                 push    eax
                 call    write_string          ; * выведем на экран называние вируса
 ;
@@ -127,80 +164,33 @@ ill_or_healthy: mov     eax,dword ptr [ill_mark] ; eax - номер обнару
 ;═══════════════════════
 ; файл здоров
 ;
- file_healthy:  push    offset msg_healthy
+ file_healthy:  push    msg_healthy
  show_nfo:      call    write_string          ; * выведем на экран результат проверки
- show_eos:      push    offset msg_eos
+ show_eos:      push    msg_eos
                 call    write_string
- close_file:    push    handle
-                call    CloseHandle
-                cmp     1 ptr [cure_result],1 ; * файл должен быть удален ?
+
+ close_file:    cmp     dword [file_map_address],0
+                jz      close_file_handle
+;
+                push    [file_map_address]
+                push    0                     ; Освободим блок памяти выделенный
+                push    [heap_handle]         ; под разбираемый файл
+                invoke  HeapFree
+                mov     dword [file_map_address],0               
+;
+ close_file_handle:
+                push    [handle]
+                invoke  CloseHandle
+                cmp     byte [cure_result],1  ; * файл должен быть удален ?
                 jnz     process_ret
-                push    fname                 ; - название файла
-                call    DeleteFileA           ; * удалим файл
-                inc     dword ptr [deleted]
- process_ret:   push    [temp+008] fname
-                call    SetFileAttributesA    ; восстановим аттрибуты файла
+                push    [fname]               ; - название файла
+                invoke  DeleteFileA           ; * удалим файл
+                inc     dword [deleted]
+ process_ret:   push    [temp+008]
+                push    [fname]
+                invoke  SetFileAttributesA    ; восстановим аттрибуты файла
                 popad
                 ret
- endp
-;──────────────────────────────────────────────────────────────────────────────
-; вывод отчета о проверке
 ;
- report_msg     proc
-;──────────────────────────────────────────────────────────────────────────────
-                push    offset msg_scanned
-                call    write_string
-                push    scanned
-                call    show_hex
-                push    offset msg_eos
-                call    write_string
-;
-                push    offset msg_infected
-                call    write_string
-                push    infected
-                call    show_hex
-                push    offset msg_eos
-                call    write_string
-;
-                push    offset msg_cleaned
-                call    write_string
-                push    cleaned
-                call    show_hex
-                push    offset msg_eos
-                call    write_string
-;
-                push    offset msg_deleted
-                call    write_string
-                push    deleted
-                call    show_hex
-                push    offset msg_eos
-                call    write_string
-;
-                push    offset msg_modification
-                call    write_string
-                push    modification
-                call    show_hex
-                push    offset msg_eos
-                call    write_string
-                push    offset msg_eos
-                call    write_string
-                ret
- endp
-;──────────────────────────────────────────────────────────────────────────────
-; вывод на экран имяни файла
-;
- show_fname     proc
-;──────────────────────────────────────────────────────────────────────────────
-                push    esi
-                mov     esi,fname                ; ошибка открытия файла
-                cmp     dword ptr [temp+004],4
-                jc      show_fname_dsp
-                add     esi,dword ptr [temp+004]
- show_fname_dsp:push    esi
-                call    write_string
-                push    offset msg_first
-                call    write_string
-                pop     esi
-                ret
  endp
 ;──────────────────────────────────────────────────────────────────────────────

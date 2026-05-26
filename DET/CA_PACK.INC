@@ -20,52 +20,40 @@
 ;  Очень часто, декрипторы содержат множество сигнатур, которые и могут
 ; являться критерием встречи с "продуктом" какой либо утилиты.
 ;
-;──────────────────────────────────────────────────────────────────────────────
-; структура базы полностью аналогична вирусной базе
-;
-.data                 ;─────────────────────────── база сигнатур
- pck_no                 dd 1                     ; количество записей в базе
-_001_type               db etype_pe
-_001_name               db 'UPX'
-                        db 022 dup (0)
-_001_sig_len            db 006
-_001_reserved           dw ?
-_001_sig_data           db 060h,0BEh, '?',004d,08Dh,0BEh
-                        db 024 dup (0)
-_001_cure_loc           dd 0
-.code
+
 ;──────────────────────────────────────────────────────────────────────────────
 ; det_pack - проверка на упаковщики и шифровщики
 ;
 ; on start :       eax - точка входа в файл
 ; on exit  :  temp+020 - номер упаковщика в базе данных
 ;
- det_pack       proc    ftype:dword
+ proc det_pack          ftype
 ;──────────────────────────────────────────────────────────────────────────────
                 pushad
 ;───────────────
-                mov     byte ptr [temp+020],0    ; инициализация переменной
+                mov     byte [temp+020],0        ; инициализация переменной
 
-                push    ftype
-                push    offset pck_no
+                push    [ftype]
+                push    pck_no
                 push    eax
                 call    detect
                 or      eax,eax
                 jz      det_pack_ret
 ;───────────────
-                mov     byte ptr [temp+020],al
+                mov     byte [temp+020],al
                 dec     eax
                 mov     edx,entry_size
                 mul     edx
-                add     eax,offset _001_type+e_type
+                add     eax,_001_type+e_type
                 push    eax
-                push    offset msg_packed
+                push    msg_packed
                 call    write_string
                 call    write_string
-                push    offset msg_next
+                push    msg_next
                 call    write_string
 ;
  det_pack_ret:  popad
                 ret
+;
  endp
 ;──────────────────────────────────────────────────────────────────────────────

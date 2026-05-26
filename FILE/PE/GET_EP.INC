@@ -1,51 +1,34 @@
-﻿.code
-;──────────────────────────────────────────────────────────────────────────────
+﻿;──────────────────────────────────────────────────────────────────────────────
 ; get_pe_ep - определяет точку входа в PE файл
 ;
-; on start :     _ph - даные о заголовке PE
-;              fhndl - номер открытого файла
+; on start :
 ; on exit  : eax = 0 - точка входа не найдена
 ;                      ИНАЧЕ
 ;            eax     - entry point
-;             ot_loc - смещение данных о секции, в которой
-;                      расположена точка входа в буфере "all_ot"
-;             ot_1st - смещение данных о первой секции
-;                      относительно файла
 ;
- get_pe_ep      proc   fhndl:dword, _ph:dword
+ proc get_pe_ep         
 ;──────────────────────────────────────────────────────────────────────────────
                 push    edi esi ebp ebx edx ecx
-                mov     esi,_ph
-                mov     edi,offset all_ot
+;
+                mov     esi,dword [file_map_address]
+                add     esi,dword [ph_loc]       ; ESI = Начало заголовка PE
 ;───────────────
 ; рассчитаем расположение данных о секциях в файле
-; 018hex + смещение PE-заголовка PE + [_ph+014h] = XXX
+; 018hex + смещение PE-заголовка + [Size of optional header] = XXX
 ;
  sec_data_loc:  sub     edx,edx
-                mov     dx,word ptr [esi+014h]
+                mov     dx,word [esi+014h]       ; Size of optional header
                 add     edx,018H
-                add     edx,dword ptr [ph_loc]   ; edx = XXX (см. выше)
+                add     edx,esi                  ; edx = XXX (см. выше)
+                xchg    edi,edx
 
- set_to_nfo:    mov     dword ptr [ot_1st],edx   ; смещение данных о 1ой секции
-                mov     dword ptr [ot_loc],edi
-                push    FILE_BEGIN 0 edx fhndl   ; установим указатель на
-                call    SetFilePointer           ; данные о секциях PE
-
-                sub     eax,eax
-                mov     ax,word ptr [esi+006h]   ; eax - число секций в PE
-                push    eax
-                mov     edx,ot_size              ; edx - размер данных о 1 секции
-                mul     edx
-
-                push    eax
-                push    offset all_ot            ; прочтем информацию о всех
-                call    read_file                ; секциях в "all_ot"
+ set_to_nfo:    sub     ecx,ecx
+                mov     cx,word [esi+006h]       ; eax - число секций в PE
 ;───────────────
 ; проверим все секции на наличие в них точки входа
 ;
-                pop     ecx                      ; ecx - число секций в PE
  read_sec_loop: push    ecx
- check_sec_nfo: push    dword ptr [ph.EntryPoint]
+ check_sec_nfo: push    dword [esi+028h]         ; Entry point
                 push    edi
                 call    check_sec_ep             ; проверим, точка входа в этой
                 or      edx,edx                  ; секции ?
@@ -54,20 +37,20 @@
 ; расчитаем точку входа относительно начала файла
 ; [_ph+028h] (EntryPoint) - [_ot+012d] (VirtRVA) + [_ot+020d] (PhOffset) = AAA
 ;
-                mov     eax,dword ptr [esi+028h]
-                sub     eax,dword ptr [edi+012d]
-                add     eax,dword ptr [edi+020d] ; eax = AAA
+                mov     eax,dword [esi+028h]
+                sub     eax,dword [edi+012d]
+                add     eax,dword [edi+020d]     ; eax = AAA
                 pop     ecx
                 jmp     get_pe_ep_ret            ; выйдем
 ;───────────────
  next_sec:      pop     ecx
-                add     dword ptr [ot_loc],ot_size
                 add     edi,ot_size
                 loop    read_sec_loop
                 sub     eax,eax                  ; eax = 0 - не нашли entry point
 ;═══════════════════════
  get_pe_ep_ret: pop     ecx edx ebx ebp esi edi
                 ret
+;
  endp
 ;──────────────────────────────────────────────────────────────────────────────
 ; находится ли точка входа в секции, данные о которой содержатся в "ot"
@@ -78,13 +61,13 @@
 ; on exit: edx == 0 - точка входа не в секции
 ;          edx != 0 - точка входа именно в этой секции
 ;
- check_sec_ep   proc    _ot:dword, off:dword
+ proc check_sec_ep      _ot, off
 ;──────────────────────────────────────────────────────────────────────────────
-                mov     eax,off
-                mov     edi,offset _ot
-                mov     edx,dword ptr [edi+012d]
+                mov     eax,[off]
+                mov     edi,[_ot]
+                mov     edx,dword [edi+012d]
                 push    edx
-                add     edx,dword ptr [edi+008d]
+                add     edx,dword [edi+008d]
                 cmp     eax,edx
                 pop     edx
                 jge     no_ip_in_sec     ; if EntryPoint < (VirtRVA + VirtSize)
@@ -92,5 +75,6 @@
                 jge     check_ip_ret     ; if EntryPoint >= VirtRVA
  no_ip_in_sec:  sub     edx,edx
  check_ip_ret:  ret
+;
  endp
 ;──────────────────────────────────────────────────────────────────────────────

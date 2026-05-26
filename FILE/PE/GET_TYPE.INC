@@ -1,40 +1,55 @@
-﻿.code
-;──────────────────────────────────────────────────────────────────────────────
+﻿;──────────────────────────────────────────────────────────────────────────────
 ; get_type - определяет тип открытого файла
 ;
-; on start :     _eh - буфер под даные о заголовке (не менее 40 байт)
-;                _ph - буфер под даные о заголовке PE (не менее 52 байт)
+; on start :     buf - буфер под даные о заголовках файла
 ;              fhndl - номер открытого файла
 ;              fname - путь и имя открытого файла (ASCII)
 ; on exit  :     eax - тип файла: 0 - com (dos)
 ;                                 1 - exe (dos)
 ;                                 2 - PE  (win32)
 ;                eax = 10 - неизвестный тип файла
+;                buf = заголовок файла в зависимости от его типа
 ;
- get_type       proc   fname: dword, fhndl:dword, _ph:dword, _eh:dword
+ proc get_type          fname, fhndl, buf
 ;──────────────────────────────────────────────────────────────────────────────
  read_exe_hdr:  sub     eax,eax
-                push    edi esi ebp ebx ecx eax
-                mov     ebx,offset _eh
-                mov     esi,offset _ph
-                push    03FH ebx                 ; прочитаем заголовок
+                push    edi
+                push    esi
+                push    ebp
+                push    ebx
+                push    ecx
+                push    eax
+;
+                mov     ebx,[buf]
+;
+                push    040h
+                push    ebx                      ; прочитаем заголовок
                 call    read_file                ; exe-файла
 ;
-                cmp     word ptr [ebx],'ZM'
+                cmp     word [ebx],'MZ'
                 jnz     test_dos_com             ; проверим, может это COM-файл
 ;
- chk_reloc_pos: cmp     byte ptr [ebx+18h],40h   ; проверим позицию первого
+ chk_reloc_pos: cmp     byte [ebx+18h],40h       ; проверим позицию первого
                 jc      its_dos_exe              ; элемента Relocation Table
 ;
                 sub     edx,edx
-                mov     dx,word ptr [ebx+03Ch]
-                mov     dword ptr [ph_loc],edx   ; запомним смещение заголовка
-                push    FILE_BEGIN 0 edx fhndl   ; установим указатель на
-                call    SetFilePointer           ; начало заголовка PE
+                mov     dx,word [ebx+03Ch]
+                cmp     edx,dword [temp+024]    ; Сравним с размером файла
+                ja      its_dos_exe              
 ;
- read_pe_hdr:   push    ph_size esi              ; прочитаем часть
-                call    read_file                ; (92 байта из) заголовка PE
-                cmp     word ptr [esi],'EP'      ; проверим, может это не PE-файл
+                mov     dword [ph_loc],edx       ; запомним смещение заголовка
+;
+                push    FILE_BEGIN
+                push    0
+                push    edx
+                push    [fhndl]                  ; установим указатель на
+                invoke  SetFilePointer           ; начало заголовка PE
+;
+ read_pe_hdr:   push    ph_size
+                push    ebx                      ; прочитаем часть 
+                call    read_file                ; PE-заголовка
+;
+                cmp     word [ebx],'PE'          ; проверим, может это не PE-файл
                 jnz     its_dos_exe
 ;───────────────
  its_pe:        pop     eax
@@ -45,18 +60,24 @@
                 inc     eax
                 jmp     get_type_ret+1
 ;───────────────
- test_dos_com:  mov     esi,fname
+ test_dos_com:  mov     esi,[fname]
                 push    esi
-                call    lstrlenA
-                cmp     dword ptr [esi+eax-4],'MOC.'
+                invoke  lstrlenA
+                cmp     dword [esi+eax-4],'.COM'
                 jz      get_type_ret
-                cmp     dword ptr [esi+eax-4],'moc.'
+                cmp     dword [esi+eax-4],'.com'
                 jz      get_type_ret
 ;
                 pop     eax
                 mov     al,10
                 push    eax
 ;═══════════════
- get_type_ret:  pop     eax ecx ebx ebp esi edi
+ get_type_ret:  pop     eax
+                pop     ecx
+                pop     ebx
+                pop     ebp
+                pop     esi
+                pop     edi
                 ret
+;
  endp

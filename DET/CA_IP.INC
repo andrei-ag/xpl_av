@@ -53,13 +53,13 @@
 ; регистров, который и будет в последующем содержать результат подсчета
 ; "разницы смещений".
 ;
-.code
+
 ;──────────────────────────────────────────────────────────────────────────────
 ; ca_ip_srch - проверка на процедуры подсчета delta value
 ;
 ; on start : esi - смещение исследуемого кода
 ;
- ca_ip_srch     proc
+ proc ca_ip_srch
 ;──────────────────────────────────────────────────────────────────────────────
                 pushad
 ;───────────────
@@ -67,9 +67,9 @@
 ;
 ; ca_ip_percent - номер этапа, на котором сейчас находится кодо-анализатор
 ;
-                cmp     byte ptr [ca_ip_percent],2
+                cmp     byte [ca_ip_percent],2
                 jz      ca_ip_srch_ret
-                cmp     byte ptr [ca_ip_percent],1
+                cmp     byte [ca_ip_percent],1
                 jz      ca_ip_stage_2
 ;───────────────
 ; Первый этап
@@ -83,8 +83,8 @@
                 cmp     al,0e8h
                 jnz     ca_ip_srch_ret
                 lodsd
-                inc     byte ptr [ca_ip_percent]
-                mov     dword ptr [ca_ip_call_off],esi
+                inc     byte [ca_ip_percent]
+                mov     dword [ca_ip_call_off],esi
                 jmp     ca_ip_srch_ret
 ;───────────────
 ; Второй этап: первая часть
@@ -95,18 +95,18 @@
 ; инструкций, ни один из регистров не содержит значения - заготовки для
 ; подсчета delta value. То начинаем с первого этапа - обнуляем "ca_ip_percent".
 ;
- ca_ip_stage_2: mov     esi,offset [regs]
+ ca_ip_stage_2: mov     esi,regs
                 sub     ecx,ecx
                 mov     cl,7+1
  ca_ip_srch_lp: lodsd
-                cmp     dword ptr [ca_ip_call_off],eax
+                cmp     dword [ca_ip_call_off],eax
                 jz      ca_ip_stage_3            ; перейдем ко второй части
                 loop    ca_ip_srch_lp
-                inc     byte ptr [ca_ip_instr]
-                cmp     byte ptr [ca_ip_instr],8
+                inc     byte [ca_ip_instr]
+                cmp     byte [ca_ip_instr],8
                 jnz     ca_ip_srch_ret
-                mov     word ptr [ca_ip_percent],0
-                mov     dword ptr [ca_ip_call_off],0
+                mov     word [ca_ip_percent],0
+                mov     dword [ca_ip_call_off],0
                 jmp     ca_ip_srch_ret
 ;───────────────
 ; Второй этап: вторая часть
@@ -116,11 +116,11 @@
 ;  Присвоим значение 2 переменной "ca_ip_percent", это означает, что работа
 ; этой части кодо-анализатора, для разбираемого файла прекращена.
 ;
- ca_ip_stage_3: inc     byte ptr [ca_ip_percent]
+ ca_ip_stage_3: inc     byte [ca_ip_percent]
                 sub     eax,eax
                 mov     al,7+1
                 sub     al,cl
-                mov     byte ptr [eax+_regs],1   ; регистр "eax" содержит d_v
+                mov     byte [eax+_regs],1   ; регистр "eax" содержит d_v
 ;───────────────
  ca_ip_srch_ret:popad
                 ret
@@ -130,16 +130,17 @@
 ;
 ; on start : al - байт типа 00regREG, где reg и REG - значения регистров
 ;
- ca_check_regs  proc
+ proc ca_check_regs         
 ;──────────────────────────────────────────────────────────────────────────────
                 call   two_regs
-                cmp    byte ptr [eax+_regs],0
+                cmp    byte [eax+_regs],0
                 jz     check_regs_2
-                mov    dl,byte ptr [eax+_regs]
+                mov    dl,byte [eax+_regs]
                 ret
 ;───────────────
- check_regs_2:  mov    dl,byte ptr [edx+_regs]
+ check_regs_2:  mov    dl,byte [edx+_regs]
                 ret
+;
  endp
 ;──────────────────────────────────────────────────────────────────────────────
 ;  Заполним буфер "_regs_nfo" значениями регистров, содержащих delta_value.
@@ -147,53 +148,54 @@
 ; _regs_nfo + 000     - число значений в буфере
 ; _regs_nfo + 004 ... - значения
 ;
- ca_fill_buf    proc
+ proc ca_fill_buf           
 ;──────────────────────────────────────────────────────────────────────────────
                 pushad
                 mov    ecx,7+1
-                mov    edi,offset _regs_nfo
-                mov    esi,offset regs
-                sub    eax,eax              ; eax=0-номер проверяемого регистра
+                mov    edi,_regs_nfo
+                mov    esi,regs
+                sub    eax,eax                   ; eax=0-номер проверяемого регистра
                 stosd                            ; _regs_nfo = 0
                                                  ; edi = _regs_nfo + 4
 ;───────────────
-_ca_fill_buf:   cmp    byte ptr [eax+_regs],1    ; регистр содержит значение
+ _ca_fill_buf:  cmp    byte [eax+_regs],1        ; регистр содержит значение
                 jnz    ca_fill_buf_lp            ; типа 1 (delta_value) ?
 ;
                 push   eax
-                mov    eax,dword ptr [esi]       ; eax = значение вирт. регистра
+                mov    eax,dword [esi]           ; eax = значение вирт. регистра
                 stosd                            ; занесем в буфре "_regs_nfo"
                 pop    eax
-                inc    dword ptr [_regs_nfo] ; увеличим число значений в буфере
+                inc    dword [_regs_nfo]         ; увеличим число значений в буфере
  ca_fill_buf_lp:inc    eax                       ; следующий регистр
                 add    esi,4                     ;
                 loop  _ca_fill_buf
 ;
                 popad
                 ret
+;
  endp
 ;──────────────────────────────────────────────────────────────────────────────
 ;  Если значения виртуальных регистров совпадут с значениями delta value
 ; содержащимися в буфере "_regs_nfo", установить таким регистрам тип "1"
 ;
- ca_check_buf   proc
+ proc ca_check_buf          
 ;──────────────────────────────────────────────────────────────────────────────
-                mov    edi,offset _regs_nfo
-                cmp    dword ptr [edi],0         ; Буфер "_regs_nfo" пуст ?
+                mov    edi,_regs_nfo
+                cmp    dword [edi],0             ; Буфер "_regs_nfo" пуст ?
                 jz     ca_check_bret
 ;
                 pushad
                 sub    edx,edx                   ; edx = 0 = номер проверяемого регистра
                 mov    ecx,7+1
                 add    edi,4                     ; edi = "_regs_nfo + 004"
-                mov    esi,offset regs           ; esi = значения вирт. регистров
+                mov    esi,regs                  ; esi = значения вирт. регистров
 _ca_check_buf:  lodsd
                 push   ecx edi
 ;
-                mov    ecx,dword ptr [_regs_nfo] ; ecx = количество значений DV
- ca_chk_reg:    cmp    dword ptr [edi],eax       ; DV совпадает со значением
+                mov    ecx,dword [_regs_nfo]     ; ecx = количество значений DV
+ ca_chk_reg:    cmp    dword [edi],eax           ; DV совпадает со значением
                 jnz    ca_chk_reg_lp             ; виртуального регистра ?
-                mov    byte ptr [edx+_regs],1    ; значит в регистре содержится DV
+                mov    byte [edx+_regs],1        ; значит в регистре содержится DV
  ca_chk_reg_lp: add    edi,4                     ; проверим следующие значение DV
                 loop   ca_chk_reg
 ;
@@ -202,4 +204,5 @@ _ca_check_buf:  lodsd
                 loop  _ca_check_buf
                 popad
  ca_check_bret: ret
+;
  endp

@@ -2,21 +2,22 @@
 ;
 ; Инициализация кодоанализатора
 ;
- ca_init        proc
+ proc ca_init    
 ;──────────────────────────────────────────────────────────────────────────────
                 push   eax ecx edi
-                mov    word ptr [ca_ip_percent],0
+                mov    word [ca_ip_percent],0
  reg_analyze:   sub    eax,eax
                 sub    ecx,ecx
                 mov    cl,8
-                mov    edi,offset _regs
+                mov    edi,_regs
  ra_init_loop:  stosb
                 loop   ra_init_loop
 ;
 ; тип значений виртуального регистра esp - 2 (stack)
 ;
-                mov    byte ptr [_regs+4],2
+                mov    byte [_regs+4],2
                 pop    edi ecx eax
                 ret
+;
  endp
 ;──────────────────────────────────────────────────────────────────────────────

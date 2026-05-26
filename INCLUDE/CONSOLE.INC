@@ -2,94 +2,96 @@
 ; console routines (c) 1998 by h-    [hayras@hotmail.com]
 ;                  (c) 2003 by _andy [jpanic@mail.ru]
 ;
-.code
 ;──────────────────────────────────────────────────────────────────────────────
- init_console   proc
+ proc init_console
 ;──────────────────────────────────────────────────────────────────────────────
                 push    STD_INPUT_HANDLE
-                call    GetStdHandle
+                invoke  GetStdHandle
+
                 or      eax,eax
                 je      init_error
                 mov     [console_in],eax
                 push    STD_OUTPUT_HANDLE
-                call    GetStdHandle
+                invoke  GetStdHandle
+
                 or      eax,eax
                 je      init_error
                 mov     [console_out],eax
                 ret
- init_error:    push    0
-                call    ExitProcess
+
+ init_error:    invoke  ExitProcess,0
+;
  endp
 ;──────────────────────────────────────────────────────────────────────────────
- write_console  proc    text_out:dword, text_len:dword
+ proc write_console     text_out, text_len
 ;──────────────────────────────────────────────────────────────────────────────
                 pusha
                 push    0
-                push    offset bytes_read             ; number of bytes read
-                push    text_len                      ; text length
-                push    text_out                      ; offset of text
-                push    console_out                   ; handle
-                call    WriteConsoleA
+                push    bytes_read                    ; number of bytes read
+                push    [text_len]                    ; text length
+                push    [text_out]                    ; offset of text
+                push    [console_out]                 ; handle
+                invoke  WriteConsoleA
                 popa
                 ret
  endp
 ;──────────────────────────────────────────────────────────────────────────────
- write_string   proc    text_out:dword                ; (c) _andy [mnt]
+ proc write_string      text_out                ; (c) _andy [mnt]
 ;──────────────────────────────────────────────────────────────────────────────               
                 pusha
-                push    text_out
-                call    lstrlenA
+                push    [text_out]
+                invoke  lstrlenA
                 push    eax
-                push    text_out
+                push    [text_out]
                 call    write_rep
 ;
                 push    eax                
-                push    text_out
+                push    [text_out]
                 call    write_console
                 popa
                 ret
  endp
 ;──────────────────────────────────────────────────────────────────────────────
- write_hex      proc    hex_in:dword, value1:dword, value2:dword, value3:dword
+ proc write_hex         hex_in, value1, value2, value3
 ;──────────────────────────────────────────────────────────────────────────────
                 pusha
-                push    value3
-                push    value2
-                push    value1
-                push    hex_in
-                push    offset text_buff
-                call    _wsprintfA
+                push    [value3]
+                push    [value2]
+                push    [value1]
+                push    [hex_in]
+                push    text_buff
+                invoke  wsprintfA
+;
                 add     esp, 4*5
-                push    eax offset text_buff
+                push    eax text_buff
                 call    write_console
                 popa
                 ret
  endp
 ;──────────────────────────────────────────────────────────────────────────────
-  write_stat    proc    str_disp:dword, val1:dword, val2:dword, \
-                            val3:dword, val4:dword, val5:dword
+ proc write_stat        str_disp, val1, val2, val3, val4, val5
 ;──────────────────────────────────────────────────────────────────────────────
                 pusha
-                push    val1 val2 val3 val4 val5
-                push    str_disp
-                push    offset text_buff
-                call    _wsprintfA
+                push    [val1] [val2] [val3] [val4] [val5] [str_disp]
+                push    text_buff
+                invoke  wsprintfA
+
                 add     esp, 4*7
-                push    eax offset text_buff
+                push    eax text_buff
                 call    write_console
                 popa
                 ret
- endp
+  endp
 ;──────────────────────────────────────────────────────────────────────────────
-; перевод числа "snum" в десятичный вид и сохранение в буффере "sbuf" 
+; перевод числа "snum" в десятичный вид и сохранение в буфере "sbuf" 
 ; (c) _andy [mnt]
 ;
- hex_to_dec     proc   sbuf: dword, snum: dword
+ proc hex_to_dec       sbuf, snum
 ;──────────────────────────────────────────────────────────────────────────────
                 push   eax ecx ebx ebp esi edi   ; сохраним регистры
-                mov    edx,snum                  ; edx - число для перевода
+                mov    edx,[snum]                ; edx - число для перевода
                 sub    ecx,ecx                   ; инициализация счетчика
-                mov    edi,sbuf
+                mov    edi,[sbuf]
                 add    edi,10                    ; указатель для буффера
 ;───────────────
  htd_main_loop: push   ecx                       ; ecx - счетчик размера числа
@@ -106,26 +108,50 @@
                 or     edx,edx                   ; все?
                 jnz    htd_main_loop
 ;───────────────
-; десятичное число лежит задом на перед в "sbuf+10" перенесем его в "sbuf"
-; и переведем в нормальный вид
+; число лежит в обратном порядке, перенесем его в "sbuf" и приведем "в чувство"
 ;
-                mov    esi,sbuf
+                mov    esi,[sbuf]
  htd_back_loop: dec    edi
                 mov    al,[edi]
                 mov    [esi],al
                 inc    esi
                 loop   htd_back_loop
-                mov    byte ptr [esi],0          ; установим конец числа
+                mov    byte [esi],0              ; установим конец числа
                 pop    edi esi ebp ebx ecx eax   ; востановим сохраненые регистры
                 ret
  endp
 ;──────────────────────────────────────────────────────────────────────────────
- show_hex       proc    no:dword                 ; (c) _andy [mnt]
+; перевод двойного "snum" в шестнадцатеричный вид и сохранение в буфере "sbuf" 
+;
+; by Mikl__ (http://www.wasm.ru/forum/viewtopic.php?id=20503)
+;
+ proc dword_to_str     sbuf, snum
 ;──────────────────────────────────────────────────────────────────────────────
-                push    no
-                push    offset text_buff
+                push   eax ecx ebx esi edi       ; сохраним регистры
+                mov    eax,[snum]                ; eax - число для перевода
+                mov    esi,[sbuf]
+                sub    ecx,ecx
+                mov    cl,8  
+ dword_to_str_lp:
+             	push   eax
+	        and    al,0Fh
+	        cmp    al,0Ah
+	        sbb    al,69h
+	        das
+	        mov    byte [esi+ecx-1],al
+   	        pop    eax
+	        shr    eax,4
+	        loop   dword_to_str_lp 
+                pop    edi esi ebx ecx eax       ; востановим сохраненые регистры
+                ret
+ endp
+;──────────────────────────────────────────────────────────────────────────────
+ proc show_hex          no                 ; (c) _andy [mnt]
+;──────────────────────────────────────────────────────────────────────────────
+                push    [no]
+                push    text_buff
                 call    hex_to_dec
-                push    offset text_buff
+                push    text_buff
                 call    write_string
                 ret
  endp
