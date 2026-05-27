@@ -21,7 +21,7 @@
 ### 🩺 Virus Disinfection (Rare in Open Source)
 The antivirus can not only detect but also **remove virus code and restore infected PE files**. Disinfection routines are implemented for:
 - ✅ **Win32/Parite.b**
-- ✅ **W32/Krized [4029]** (infects KERNEL32.DLL)
+- ✅ **W32/Krized [4029]** (infects `KERNEL32.DLL`)
 - ✅ **Win32/Funlove [4099]**
 - ✅ **W95/Marburg [8582]**
 
@@ -65,7 +65,7 @@ fasm.exe xpl.asm
 | :--- | :--- |
 | `DATA/` | Static data for the antivirus |
 | `DET/` | Detection routines (signatures, unpackers) |
-| `DOCS/` | Documentation (Russian/English) |
+| `DOCS/` | Documentation (Russian) |
 | `EMUL/` | Core emulator and API emulation |
 | `FASM_INC/` | Flat Assembler include files |
 | `FILE/` | PE loading, import parsing, dumping |
@@ -75,6 +75,26 @@ fasm.exe xpl.asm
 | `disasm/` | Custom x86 disassembler |
 | `LICENSE.txt` | GNU General Public License v3 |
 | `XPL.ASM` | Main source file |
+
+## 📚 Related Publications & Historical Notes
+
+The following articles were written by me to explain the core technologies implemented in Explosion Antivirus. They provide theoretical background and practical insights into the design of the emulator, code analyzer, and anti-emulation techniques. The articles greatly benefited from the help and support of the **UINC.ru team**, with special thanks to **Dr.Golova** for valuable contributions.
+
+The recommended reading order follows the logical flow from basic emulation architecture to advanced analysis and vulnerability testing.
+
+1.  **"Code Emulation"** (15 February 2004)  
+    *Architecture of the x86 emulator: virtual stack, virtual registers, «sandboxed» instruction execution (`run_instr`), and full emulation of complex instructions (`call`, `ret`, conditional jumps).*  
+    [Archived version](https://web.archive.org/web/20051215194308/http://uinc.ru:80/articles/47/)
+
+2.  **"Code Analyzers in Antivirus Software"** (24 February 2004)  
+    *Delta value detection (search for `call $+5`/`pop reg` routines), signature matching with wildcards (`'?'`), and a packer detector (e.g., UPX).*  
+    [Archived version](https://web.archive.org/web/20051215213447/http://uinc.ru:80/articles/45/)
+
+3.  **"Vulnerabilities of Code Emulators"** (6 April 2004)  
+    *Anti-emulation tricks (delta value, initial EAX value, `idiv32` tests, API calls) with real-world testing results against popular antivirus engines of the time.*  
+    [Archived version](https://web.archive.org/web/20051215200738/http://uinc.ru:80/articles/48/)
+
+These articles formed the theoretical foundation for many components of Explosion Antivirus and were originally published on *UInC.ru* (now preserved via the Wayback Machine). The complete source code of the antivirus is available in this repository as a practical implementation of the described techniques.
 
 ## 🚀 Usage
 XPL.EXE { KEYS } { PATH }
@@ -104,9 +124,14 @@ XPL.EXE /* /rc
 This project is licensed under the GNU General Public License v3. A copy of the license is included in the repository (LICENSE.txt). An unofficial Russian translation is also provided for convenience.
 
 ## 🙏 Acknowledgements & Historical Note
+
 The original version of this antivirus dates back to 2008 and has been maintained as an educational project.
 
 The disinfection routines were originally written for specific virus families that were prevalent in the 2000s.
 
 The project is a tribute to the golden era of low-level virus engineering and serves as a learning resource for reverse engineers and security researchers.
+
+First versions (001 and 010) were published on [https://www.sac.sk](https://www.sac.sk) (use search text '*Explosion Antivirus*').
+
+© 2004–2008 Most Needful Things [MNT]. Re-released for preservation, 2026.
 
