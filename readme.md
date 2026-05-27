@@ -14,14 +14,14 @@
 
 ### 🧠 Custom Code Emulator (x86 Assembly)
 - Implements a **full x86 instruction emulator** written from scratch in assembly (99.7% of the codebase).
-- Capable of emulating polymorphic decryptors found in viruses like **W95/Marburg, W32/Krized, W32/Thorin, Win32/Deadcode, Win32/Driller** (average decryptor size ~9 KB), and **Win9X/Prizzy** (which uses FPU/MMX instructions for junk code).
+- Capable of emulating polymorphic decryptors found in viruses like **Win32/Driller** (average decryptor size ~9 KB and uses complex anti-emulation API calls), and **Win9X/Prizzy** (which uses FPU/MMX instructions for junk code), **Win32/Deadcode** (which uses PEB), **W95/Marburg**, **W32/Krized**, **W32/Thorin**.
 - Includes a **loop detector** to avoid getting stuck in long decryption loops.
 - **Emulates 31 Windows API calls** (e.g., `GetTickCount`, `GetVersion`, `GetCommandLineA`, `IsBadReadPtr`) to bypass common anti-emulation tricks.
 
 ### 🩺 Virus Disinfection (Rare in Open Source)
 The antivirus can not only detect but also **remove virus code and restore infected PE files**. Disinfection routines are implemented for:
 - ✅ **Win32/Parite.b**
-- ✅ **W32/Krized [4029]**
+- ✅ **W32/Krized [4029]** (infects KERNEL32.DLL)
 - ✅ **Win32/Funlove [4099]**
 - ✅ **W95/Marburg [8582]**
 
@@ -41,7 +41,7 @@ Compared to most open-source antivirus projects, Explosion Antivirus has several
 | Aspect | Explosion Antivirus | Most Open-Source AVs |
 | :--- | :--- | :--- |
 | **Code Emulation** | ✅ Custom x86 emulator in ASM | ❌ or use external libs (Unicorn) |
-| **Polymorphic Virus Detection** | ✅ W95/Marburg, Driller, Prizzy | ❌ Mostly signature-based |
+| **Polymorphic Virus Detection** | ✅ W32/Driller, Win9X/Prizzy, W95/Marburg | ❌ Mostly signature-based |
 | **Disinfection (Curing)** | ✅ Parite, Krized, Funlove, Marburg | ❌ Detection only |
 | **API Emulation** | ✅ 31 Windows API functions | ❌ Rare |
 | **Language** | Assembly (99.7%) | C/C++/Python |
@@ -51,7 +51,7 @@ Compared to most open-source antivirus projects, Explosion Antivirus has several
 ## 🚀 Getting Started
 
 ### Build Requirements
-- **Flat Assembler (fasmg)** version 1.67.29 or compatible.
+- **Flat Assembler (fasm)** version 1.67.29 or compatible.
 - All necessary FASM include files are provided in the `FASM_INC/` directory.
 
 ### Build Instructions
