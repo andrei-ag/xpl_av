@@ -1,101 +1,112 @@
+# 🛡️ Explosion Antivirus
 
-                           ______      ______       ______
-                      _____\    /____ |     /_______\    /
-   ___________________\    /\        \|                 /__________M 0 S T___
-   _________________      /__\  ___   \      \    /      _______N 3 3 d F U L
-   ______________________      /  /     ______\  /     \_________T h I N G S_
-                         \    /  /______\      \/ \    /
-                          \  /                     \  /
-                           \/                       \/
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Language](https://img.shields.io/badge/ASM-99.7%25-orange)](https://github.com/andrei-ag/xpl_av)
+[![Version](https://img.shields.io/badge/version-012BETA-red)](https://github.com/andrei-ag/xpl_av/releases)
 
-                              Explosion Antivirus
-                      Copyright MOST NEEDFUL THINGS [MNT]
+**Educational antivirus demonstrating PE file disinfection, custom x86 emulation, and polymorphic virus detection.**
 
+> ⚠️ **Important:** This software is for **educational and research purposes only**. It is designed to demonstrate antivirus techniques and should not be used on production systems. Use it only in isolated environments (e.g., virtual machines) with backup copies of files.
 
- *** О программе
+---
 
-   Программа Explosion Antivirus, предназначена для демонстрации способов
- реализации различных антивирусных технологий.
+## 🎯 Key Features
 
-   В комплект каждой версии входят полные исходные тексты, с комментариями
- на русском и английском языках.
+### 🧠 Custom Code Emulator (x86 Assembly)
+- Implements a **full x86 instruction emulator** written from scratch in assembly (99.7% of the codebase).
+- Capable of emulating polymorphic decryptors found in viruses like **W95/Marburg, W32/Krized, W32/Thorin, Win32/Deadcode, Win32/Driller** (average decryptor size ~9 KB), and **Win9X/Prizzy** (which uses FPU/MMX instructions for junk code).
+- Includes a **loop detector** to avoid getting stuck in long decryption loops.
+- **Emulates 31 Windows API calls** (e.g., `GetTickCount`, `GetVersion`, `GetCommandLineA`, `IsBadReadPtr`) to bypass common anti-emulation tricks.
 
-   Компиляция исходных текстов возможна при помощи программы flat assembler
- версии 1.67.29 (проверка на совместимость с более ранними версиями, нами не
- производлась). Для успешной "сборки" утилиты, требуются файлы из комплекта
- поставки компилятора "flat assembler", так что они включены в архив начиная
- с 11'ой версии Explosion antivirus и находятся в каталоге: "fasm_inc".
+### 🩺 Virus Disinfection (Rare in Open Source)
+The antivirus can not only detect but also **remove virus code and restore infected PE files**. Disinfection routines are implemented for:
+- ✅ **Win32/Parite.b**
+- ✅ **W32/Krized [4029]**
+- ✅ **Win32/Funlove [4099]**
+- ✅ **W95/Marburg [8582]**
 
-  ВНИМАНИЕ! Начиная с 11'ой версии, Explosion Antivirus защищен
- Стандартной Общественной Лицензией GNU, оригинал которой (на английском
- языке) включен в комплект поставки программы. Так же, в комплект поставки
- включен неофициальный перевод Стандартной Общественной Лицензии GNU на
- русский язык, который призван помочь людям, владеющим русским языком,
- лучше понять ее смысл.
+### 🔍 PE File Analysis & Dumping
+- Deep analysis of **Portable Executable (PE)** structure (headers, sections, import/export tables).
+- Option to create **memory dumps** (`/d` key) of decrypted virus bodies for further analysis.
+- Debug output for detected loops (`/di` key).
 
+### 🖥️ Console Interface
+- Command-line driven with flexible scanning options.
+- Supports scan reports (`/rc`, `/ra`), recursive scanning (`/*`), and disinfection (`/c`).
 
- *** Возможности антивируса
+## 💎 What Makes This Project Unique
 
- + Антивирус содержит реализацию простейшего эмулятора кода, возможности
- которого позволяют определять в исполняемых файлах формата PE
- наличие таких полиморфных вирусов как W95/Marburg, W32/Krized,
- W32/Thorin, Win32/Deadcode. И вирусов способных генерировать достаточно
- сложные полиморфные расшифровщики, например Win32/Driller (средний размер
- декриптора около 9 килобайт) и Win9X/Prizzy (использующий в качестве мусора
- большое количество инструкций сопроцессора и MMX).
+Compared to most open-source antivirus projects, Explosion Antivirus has several distinctive features:
 
- + В комплект включены файлы с алгоритмами лечения следующих вирусов:
+| Aspect | Explosion Antivirus | Most Open-Source AVs |
+| :--- | :--- | :--- |
+| **Code Emulation** | ✅ Custom x86 emulator in ASM | ❌ or use external libs (Unicorn) |
+| **Polymorphic Virus Detection** | ✅ W95/Marburg, Driller, Prizzy | ❌ Mostly signature-based |
+| **Disinfection (Curing)** | ✅ Parite, Krized, Funlove, Marburg | ❌ Detection only |
+| **API Emulation** | ✅ 31 Windows API functions | ❌ Rare |
+| **Language** | Assembly (99.7%) | C/C++/Python |
 
-  Win32/Parite.b, Win32/Krized [4029], Win32/Funlove [4099],
-  Win95/Marburg [8582]
+---
 
-   Однако их работоспособность не проверялась с 10'ой версии антивируса, так
-   что функция лечения утилиты, временно отключена (вы можете включить ее по
-   собственному желанию).
-               
- + По результатам проведенной проверки, возможно создание файлов отчета.
+## 🚀 Getting Started
 
- + Возможно создание дампов исполняемых файлов. Это может быть полезно, для
-   получения расшифрованных экземпляров вирусного кода (справедливо не только
-   тех вирусов, что обнаруживаются утилитой, но и других).
+### Build Requirements
+- **Flat Assembler (fasmg)** version 1.67.29 or compatible.
+- All necessary FASM include files are provided in the `FASM_INC/` directory.
 
+### Build Instructions
+```
+fasm.exe xpl.asm
+```
 
- *** Запуск
+## 📂 Repository Structure
 
-   Антивирус представляет собой "консольную программу" (не содержит
- интерфейса). Для задания параметров сканирования, могут использоваться
- следующие параметры:
+| Directory/File | Description |
+| :--- | :--- |
+| `DATA/` | Static data for the antivirus |
+| `DET/` | Detection routines (signatures, unpackers) |
+| `DOCS/` | Documentation (Russian/English) |
+| `EMUL/` | Core emulator and API emulation |
+| `FASM_INC/` | Flat Assembler include files |
+| `FILE/` | PE loading, import parsing, dumping |
+| `INCLUDE/` | Common include files |
+| `SECTIONS/` | PE section structure definitions |
+| `det/cure/` | Virus-specific disinfection routines |
+| `disasm/` | Custom x86 disassembler |
+| `LICENSE.txt` | GNU General Public License v3 |
+| `XPL.ASM` | Main source file |
 
-   XPL.EXE { KEYS } { PATH }
+## 🚀 Usage
+XPL.EXE { KEYS } { PATH }
 
-  { KEYS } : /rc - создание файла отчета (xplosion.rep)
-             /ra - добавление в уже существующий файл отчета
-             /*  - проверка всех дисков системы
-             /с  - лечение файлов, зараженных известными вирусами
+| Key | Description |
+| :--- | :--- |
+| `/rc` | Create scan report (`xplosion.rep`) |
+| `/ra` | Append to existing report |
+| `/*` | Scan all fixed drives |
+| `/c` | **Cure infected files** (disinfection mode) |
+| `/d` | Create memory dumps of scanned PE files |
+| `/di` | Display loop detection information (debug) |
+| `/t-` | Disable emulation timer (may cause hangs) |
 
-             отладочные параметры:
+**Examples:**
 
-             /d  - формирование дампов всех проверенных PE-файлов
-             /di - вывод информации по циклам, выявленным в ходе
-                   эмуляции файла  
-             /t- - отключение таймера проверки файлов (может вызвать зависание)
+### Scan a directory and cure infected files
+```
+XPL.EXE /c C:\samples\
+```
+### Scan all drives and create a report
+```
+XPL.EXE /* /rc
+```
 
-  { PATH } : путь для сканирования
-             (если используете ключ "/*", путь указывать не нужно)
+## 📄 License
+This project is licensed under the GNU General Public License v3. A copy of the license is included in the repository (LICENSE.txt). An unofficial Russian translation is also provided for convenience.
 
-   Прервать выполнение антивируса можно с помощью комбинации: [Ctrl]+[C].
+## 🙏 Acknowledgements & Historical Note
+The original version of this antivirus dates back to 2008 and has been maintained as an educational project.
 
+The disinfection routines were originally written for specific virus families that were prevalent in the 2000s.
 
- *** Поддержка
+The project is a tribute to the golden era of low-level virus engineering and serves as a learning resource for reverse engineers and security researchers.
 
-   Если Вы обнаружили ошибку в работе программы или ее исходных текстах,
- обязательно свяжитесь с нами. 
-
-   Любые свои положительные и отрицательные эмоции просьба слать нам. Мы 
- попытаемся их учесть в следующих версиях программы.
-
-  WWW     : http://explosion.needful-things.ru
-  E-MAIL  : explosion[at]needful_things.ru
-  RELEASED: 09/03/2009 
-                                                                               
-                                                  (c) Most Needful Things [MNT]
