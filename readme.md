@@ -47,7 +47,7 @@ This project was written in **assembly language**—not because it's the easiest
 - **Emulates 31 Windows API calls** (e.g., `GetTickCount`, `GetVersion`, `GetCommandLineA`, `IsBadReadPtr`) to bypass common anti-emulation tricks.
 
 ### 🩺 Virus Disinfection (Rare in Open Source)
-The antivirus can not only detect but also **remove virus code and restore infected PE files**. Disinfection routines are implemented for:
+The antivirus can not only detect but also **remove virus code and restore infected PE files**. Disinfection routines are implemented in version 010 for:
 - ✅ **Win32/Parite.b**
 - ✅ **W32/Krized [4029]** (infects `KERNEL32.DLL`)
 - ✅ **Win32/Funlove [4099]**
@@ -70,7 +70,7 @@ Compared to most open-source antivirus projects, Explosion Antivirus has several
 | :--- | :--- | :--- |
 | **Code Emulation** | ✅ Custom x86 emulator in ASM | ❌ or use external libs (Unicorn) |
 | **Polymorphic Virus Detection** | ✅ W32/Driller, Win9X/Prizzy, W95/Marburg | ❌ Mostly signature-based |
-| **Disinfection (Curing)** | ✅ Parite, Krized, Funlove, Marburg | ❌ Detection only |
+| **Disinfection (Curing)** | ✅ Parite, Krized, Funlove, Marburg (in version 010) | ❌ Detection only |
 | **API Emulation** | ✅ 31 Windows API functions | ❌ Rare |
 | **Language** | Assembly (99.7%) | C/C++/Python |
 
@@ -153,7 +153,7 @@ This project is licensed under the GNU General Public License v3. A copy of the 
 
 ## 🙏 Acknowledgements & Historical Note
 
-The original version of this antivirus dates back to 2008 and has been maintained as an educational project.
+The original version of this antivirus dates back to 2009 and has been maintained as an educational project.
 
 The disinfection routines were originally written for specific virus families that were prevalent in the 2000s.
 
@@ -161,5 +161,5 @@ The project is a tribute to the golden era of low-level virus engineering and se
 
 First versions (001 and 010) were published on [https://www.sac.sk](https://www.sac.sk) (use search text '*Explosion Antivirus*').
 
-© 2004–2008 Most Needful Things [MNT]. Re-released for preservation, 2026.
+© 2004–2009 Most Needful Things [MNT]. Re-released for preservation, 2026.
 
