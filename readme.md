@@ -16,21 +16,27 @@ This project was built on a few core beliefs:
 The primary goal has always been to **demonstrate** how antivirus technologies work, not to sell a product. The code is written to be read, studied, and learned from. Every major component is documented in both Russian and English.
 
 ### 2. Proof of Concept over Product
-At its heart, this is a **proof of concept**. The goal was to show that advanced techniques like x86 emulation, polymorphic virus detection, and PE file disinfection are not black magic reserved for large corporations.
-> **One developer, writing in assembly, could build them from scratch.**
+At its heart, this is a **proof of concept**. The goal was to show
+>that advanced techniques like x86 emulation, polymorphic virus detection, and PE file disinfection are not black magic reserved for large corporations. **One developer, writing in assembly, could build them from scratch.**
 
 ### 3. Emulation over Signatures
-Universal technologies are valued over specific solutions. The custom x86 emulator is the soul of this project. The ability to emulate any code, to create a sandbox, is far more important than a long list of virus signatures. The emulator exists to educate; the signature database exists only to test the emulator.
+> Universal technologies are valued over specific solutions.
+
+The custom x86 emulator is the soul of this project. The ability to emulate any code, to create a sandbox, is far more important than a long list of virus signatures. The emulator exists to educate; the signature database exists only to test the emulator.
 
 ### 4. Openness over Secrecy
-Knowledge should be free. This code is open, and the license (GNU GPL) guarantees it remains so. This repository serves as a living textbook for low-level programming, reverse engineering, and security research.
+>Knowledge should be free.
+>
+This code is open, and the license (GNU GPL) guarantees it remains so. This repository serves as a living textbook for low-level programming, reverse engineering, and security research.
 
 ### 5. Quality over Speed
-Open source does not mean low quality. This project was written in **assembly language**—not because it's the easiest path, but because it demonstrates a deep, uncompromising understanding of how a computer works at the lowest level. The code is meant to be a work of engineering and education.
+>Open source does not mean low quality.
+>
+This project was written in **assembly language**—not because it's the easiest path, but because it demonstrates a deep, uncompromising understanding of how a computer works at the lowest level. The code is meant to be a work of engineering and education.
 
->**If you want a tool to clean your PC, this is not for you.**
+>If you want a tool to clean your PC, this is not for you.
 
->**If you want to learn how an antivirus works under the hood, you are in the right place.**
+>If you want to learn how an antivirus works under the hood, you are in the right place.
 
 ## 🎯 Key Features
 
